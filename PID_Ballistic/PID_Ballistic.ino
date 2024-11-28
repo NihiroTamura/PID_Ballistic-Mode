@@ -156,7 +156,7 @@ int speed_range[6] = {
 
 //一度Ballistic Modeになれば一定数そのまま
 int times_range[6] = {
-  30, 3, 23, 23, 23, 23
+  33, 3, 23, 23, 23, 23
 };
 
 //初期化

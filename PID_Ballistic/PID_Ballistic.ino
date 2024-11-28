@@ -54,6 +54,7 @@ ROS2はなし
 //スイッチの定義
 #define Switch 33 //スタートボタン
 #define Switch_emergency 34 //緊急ボタン
+#define LED 35
 
 /*------変数の初期化----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 //POTの値を初期化
@@ -83,16 +84,21 @@ int VEAB6_10 = 0;
 int VEAB6_11 = 0;*/
 
 /*---PID制御用-----------------------------------------------------------------------------------------*/
-//PIDゲイン
+//PIDゲイン肘(仮)
 const float kp[6] = {
-  1.0, 3.0, 0.8, 0.35, 0.0, 0.0
+  1.0, 1.8, 0.8, 0.6, 1.2, 0.7
 };
 const float ki[6] = {
-  0.0, 0.0, 0.01, 0.002, 0.0, 0.0
+  0.0, 0.0, 0.01, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  10.0, 12.0, 10.0, 4.0, 0.0, 0.0
+  10.0, 5.0, 10.0, 5.0, 5.0, 0.0
 };
+
+//目標値の設定
+int POT_desired[6] = {
+  450, 500, 113, 233, 930, 540
+};//{腕の閉223-482開, 腕の下344-619上, 上腕の旋回内95-605外, 肘の伸144-740曲, 前腕の旋回内111-962外, 小指側縮62-895伸}
 
 //各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {
@@ -116,14 +122,58 @@ int de[6] = {
   0, 0, 0, 0, 0, 0
 };
 
-//目標値の設定
-int POT_desired[6] = {
-  320, 365, 113, 260, 950, 470
-};//{腕の閉223-482開, 腕の下344-619上, 上腕の旋回内95-605外, 肘の伸144-740曲, 前腕の旋回内111-962外, 小指側縮62-895伸}
-
 //PID出力値
 float outputPID[6] = {
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+};
+
+/*---Ballistic Mode用-----------------------------------------------------------------------------------------*/
+//Ballistic Modeチェック用
+int Ballistic_check[6] = {
+  0, 0, 0, 0, 0, 0
+};
+
+//Ballistic Mode回数
+int Ballistic_count[6] = {
+  0, 0, 0, 0, 0, 0
+};
+
+//Ballistic Mode PWM値
+const int Ballistic_PWM[12] = {
+  136, 120, 170, 86, 127, 129, 126, 130, 127, 129, 132, 124
+};
+
+//パラメータ
+//目標値にどれだけ近づいたか
+int change_range[6] = {
+  210, 100, 90, 90, 90, 90
+};
+
+//実現値の変化率
+int speed_range[6] = {
+  5, 6, 20, 20, 20, 20
+};
+
+//一度Ballistic Modeになれば一定数そのまま
+int times_range[6] = {
+  30, 3, 23, 23, 23, 23
+};
+
+//初期化
+int change[6] = {
+  0, 0, 0, 0, 0, 0
+};
+
+int speed[6] = {
+  0, 0, 0, 0, 0, 0
+};
+
+int POT_realized_previous[6] = {
+  0, 0, 0, 0, 0, 0
+};
+
+int POT_desired_previous[6] = {
+  0, 0, 0, 0, 0, 0
 };
 
 /*---VEABへのPWM信号の出力-----------------------------------------------------------------------------------------*/
@@ -140,8 +190,9 @@ int VEAB_desired[12] = {
 
 /*------ローパスフィルタ----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 //ローパスフィルタの係数
-const float coef_lpf_veab = 0.7; //VEAB
-const float coef_lpf_pot = 0.8;   //POT
+const float coef_lpf_veab = 0.7; //VEAB(開閉、上下、上腕)
+const float coef_lpf_veab_elbow = 0.92; //VEAB(肘の曲げ用)
+const float coef_lpf_pot = 0.3;   //POT
 
 //ローパスフィルタの値保持変数
 int veab_filter[12] = {
@@ -177,6 +228,7 @@ void setup() {
   //スイッチのモード設定
   pinMode(Switch, INPUT_PULLUP);
   pinMode(Switch_emergency, INPUT_PULLUP);
+  pinMode(LED, OUTPUT);
 
   //PWM周波数変更
   analogWriteFrequency(PWM1_0, 50000);
@@ -195,7 +247,7 @@ void setup() {
   //VEABの初期化
   /*ピン0,1*/
   analogWrite(PWM1_0, 255);
-  analogWrite(PWM1_1, 255);
+  analogWrite(PWM1_1, 128);
   /*ピン2,3*/
   analogWrite(PWM2_2, 255);
   analogWrite(PWM2_3, 255);
@@ -203,8 +255,8 @@ void setup() {
   analogWrite(PWM3_4, 255);
   analogWrite(PWM3_5, 255);
   /*ピン6,7*/
-  analogWrite(PWM4_6, 255);
-  analogWrite(PWM4_7, 255);
+  analogWrite(PWM4_6, 131);
+  analogWrite(PWM4_7, 124);
   /*ピン8,9*/
   analogWrite(PWM5_8, 255);
   analogWrite(PWM5_9, 255);
@@ -212,7 +264,7 @@ void setup() {
   analogWrite(PWM6_28, 255);
   analogWrite(PWM6_29, 255);
 
-  //POT値をシリアルモニタに表示(初回)および誤差(前回分)の初期化
+  //POT値をシリアルモニタに表示(初回)および誤差(前回分),実現値(前回分),目標値(前回分)の初期化
   while(digitalRead(Switch) == 1){
     //POT値をPOT_realizedに格納
     POT_realized[0] = analogRead(POT1_A12);
@@ -241,22 +293,41 @@ void setup() {
 
     //シリアルモニタに表示
     //POT
-    Serial.print("POT1:");
+    /*//Serial.print("POT1:");*/
     Serial.print(POT_realized[0]);
-    Serial.print("\t POT2:");
+    Serial.print(",");
+    Serial.print(10);
+    Serial.print(",");
+    Serial.println(Ballistic_check[0]);
+    //Serial.print(",");
+    /*//Serial.print("\t POT2:");
     Serial.print(POT_realized[1]);
-    Serial.print("\t POT3:");
+    Serial.print(",");
+    Serial.print(10);
+    Serial.print(",");
+    Serial.println(Ballistic_check[1]);*/
+    /*Serial.print("\t POT3:");
     Serial.print(POT_realized[2]);
     Serial.print("\t POT4:");
     Serial.print(POT_realized[3]);
     Serial.print("\t POT5:");
     Serial.print(POT_realized[4]);
     Serial.print("\t POT6:");
-    Serial.println(POT_realized[5]);
+    Serial.println(POT_realized[5]);*/
 
     //誤差(前回分)の初期化
     for(int i = 0; i < 6; i++){
       previous_errors[i] = POT_desired[i] - POT_realized[i];
+    }
+
+    //実現値(前回分)の初期化
+    for(int i = 0; i < 6; i++){
+      POT_realized_previous[i] = POT_realized[i];
+    }
+
+    //目標値(前回分)の初期化
+    for(int i = 0; i < 6; i++){
+      POT_desired_previous[i] = POT_desired[i];
     }
 
   }
@@ -279,22 +350,6 @@ void loop() {
   POT_realized[4] = analogRead(POT5_A16);
   POT_realized[5] = analogRead(POT6_A17);
 
-  //ローパスフィルタ適用(POT)
-  /*for(int i = 0; i < 6; i++){
-    
-    //ローパスフィルタ関数呼び出し
-    pot_filter[i] = lpf_function(POT_realized[i], previous_value_pot[i], initial_lpf_pot[i], coef_lpf_pot);
-
-    initial_lpf_pot[i] += 1;
-
-    //POT値に格納
-    POT_realized[i] = pot_filter[i];
-
-    //前回のPOT値に格納
-    previous_value_pot[i] = pot_filter[i];
-    
-  }*/
-
   //ローパスフィルタPOT(移動平均)
   for(int kaisuu = 0; kaisuu < 99; kaisuu++){
     POT_realized[0] += analogRead(POT1_A12);
@@ -312,37 +367,78 @@ void loop() {
   POT_realized[4] = POT_realized[4] /100;
   POT_realized[5] = POT_realized[5] /100;
 
+  //ローパスフィルタ適用(POT肘のみ)
+  for(int i = 3; i < 4; i++){
+    
+    //ローパスフィルタ関数呼び出し
+    pot_filter[i] = lpf_function(POT_realized[i], previous_value_pot[i], initial_lpf_pot[i], coef_lpf_pot);
 
-  //PID制御
+    initial_lpf_pot[i] += 1;
+
+    //POT値に格納
+    POT_realized[i] = pot_filter[i];
+
+    //前回のPOT値に格納
+    previous_value_pot[i] = pot_filter[i];
+    
+  }
+
+
+
+  //PID制御&Ballistic Mode
   for(int i = 0; i < 6; i++){
+    //Ballistic判定
+    Ballistic_check[i] = check_function(i);
+    
+    //Ballistic Mode
+    if(Ballistic_check[i] == 1){
+      VEAB_desired[2*i] = Ballistic_PWM[2*i];
+      VEAB_desired[2*i+1] = Ballistic_PWM[2*i+1];
 
-    //誤差計算
-    errors[i] = POT_desired[i] - POT_realized[i];
+      if(i == 0){
+        digitalWrite(LED, HIGH);
+      };
 
-    //誤差の積分値計算
-    integral[i] += errors[i];
+    }else{
+      //PID制御
 
-    //誤差の微分値計算
-    de[i] = errors[i] - previous_errors[i];
+      //誤差計算
+      errors[i] = POT_desired[i] - POT_realized[i];
 
-    //PID制御計算
-    outputPID[i] = (kp[i] * errors[i] + ki[i] * integral[i] + kd[i] * de[i]) * direction[i];
+      //誤差の積分値計算
+      integral[i] += errors[i];
 
-    //VEAB1とVEAB2に与えるPWMの値を計算し格納
-    Result veab = calculate_veab_Values(outputPID[i], i);
-    VEAB_desired[2*i] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
-    VEAB_desired[2*i+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
+      //誤差の微分値計算
+      de[i] = errors[i] - previous_errors[i];
 
-    //計算に用いた誤差を前回の誤差に変更
-    previous_errors[i] = errors[i];
+      //PID制御計算
+      outputPID[i] = (kp[i] * errors[i] + ki[i] * integral[i] + kd[i] * de[i]) * direction[i];
+
+      //VEAB1とVEAB2に与えるPWMの値を計算し格納
+      Result veab = calculate_veab_Values(outputPID[i], i);
+      VEAB_desired[2*i] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
+      VEAB_desired[2*i+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
+
+      //計算に用いた誤差を前回の誤差に変更
+      previous_errors[i] = errors[i];
+
+      if(i == 0){
+        digitalWrite(LED, LOW);
+      };
+
+    }
 
   }
 
   //ローパスフィルタ適用(VEAB)
   for(int i = 0; i < 12; i++){
-    
+
     //ローパスフィルタ関数呼び出し
-    veab_filter[i] = lpf_function(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
+    if((i == 6) || (i == 7)){
+      veab_filter[i] = lpf_function(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab_elbow);
+    }else {
+      veab_filter[i] = lpf_function(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
+    }
 
     initial_lpf_veab[i] += 1;
 
@@ -355,18 +451,18 @@ void loop() {
   }
 
   /*------VEABへ出力-----------------------------------------------------------------------------------------*/
-  /*ピン0,1
+  /*ピン0,1*/
   analogWrite(PWM1_0, VEAB_desired[0]);
-  analogWrite(PWM1_1, VEAB_desired[1]);*/
+  analogWrite(PWM1_1, VEAB_desired[1]);
   /*ピン2,3
   analogWrite(PWM2_2, VEAB_desired[2]);
   analogWrite(PWM2_3, VEAB_desired[3]);*/
   /*ピン4,5
   analogWrite(PWM3_4, VEAB_desired[4]);
   analogWrite(PWM3_5, VEAB_desired[5]);*/
-  /*ピン6,7*/
+  /*ピン6,7
   analogWrite(PWM4_6, VEAB_desired[6]);
-  analogWrite(PWM4_7, VEAB_desired[7]);
+  analogWrite(PWM4_7, VEAB_desired[7]);*/
   /*ピン8,9
   analogWrite(PWM5_8, VEAB_desired[8]);
   analogWrite(PWM5_9, VEAB_desired[9]);*/
@@ -397,20 +493,29 @@ void loop() {
 
   /*------シリアルモニタに表示-----------------------------------------------------------------------------------------*/
   /*POT*/
-  Serial.print("POT1:");
+  /*//Serial.print("POT1:");*/
   Serial.print(POT_realized[0]);
-  Serial.print("\t POT2:");
+  Serial.print(",");
+  Serial.print(11);
+  Serial.print(",");
+  Serial.println(Ballistic_check[0]);
+  //Serial.print(",");
+  /*//Serial.print("\t POT2:");
   Serial.print(POT_realized[1]);
-  Serial.print("\t POT3:");
+  Serial.print(",");
+  Serial.print(11);
+  Serial.print(",");
+  Serial.println(Ballistic_check[1]);*/
+  /*Serial.print("\t POT3:");
   Serial.print(POT_realized[2]);
   Serial.print("\t POT4:");
   Serial.print(POT_realized[3]);
   Serial.print("\t POT5:");
   Serial.print(POT_realized[4]);
   Serial.print("\t POT6:");
-  Serial.print(POT_realized[5]);
+  Serial.print(POT_realized[5]);*/
 
-  /*VEAB*/
+  /*//VEAB
   Serial.print("\t VEAB1_0:");
   Serial.print(VEAB_desired[0]);
   Serial.print("\t VEAB1_1:");
@@ -434,7 +539,21 @@ void loop() {
   Serial.print("\t VEAB6_10:");
   Serial.print(VEAB_desired[10]);
   Serial.print("\t VEAB6_11:");
-  Serial.println(VEAB_desired[11]);
+  Serial.print(VEAB_desired[11]);*/
+
+  /*Ballistic_check
+  Serial.print("\t 1:");
+  Serial.print(Ballistic_check[0]);
+  Serial.print("\t 2:");
+  Serial.println(Ballistic_check[1]);
+  Serial.print("\t 3:");
+  Serial.print(Ballistic_check[2]);
+  Serial.print("\t 4:");
+  Serial.print(Ballistic_check[3]);
+  Serial.print("\t 5:");
+  Serial.print(Ballistic_check[4]);
+  Serial.print("\t 6:");
+  Serial.println(Ballistic_check[5]);*/
 
 }
 
@@ -482,11 +601,11 @@ Result calculate_veab_Values(float outputPID, int i) {
     result.veab_value1 = 126 + (outputPID / 2.0);  
     result.veab_value2 = 130 - (outputPID / 2.0);
   } else if(i == 4){
-    result.veab_value1 = 138 + (outputPID / 2.0);  
-    result.veab_value2 = 118 - (outputPID / 2.0);
+    result.veab_value1 = 127 + (outputPID / 2.0);  
+    result.veab_value2 = 129 - (outputPID / 2.0);
   } else{
-    result.veab_value1 = 152 + (outputPID / 2.0);  
-    result.veab_value2 = 104 - (outputPID / 2.0);
+    result.veab_value1 = 132 + (outputPID / 2.0);  
+    result.veab_value2 = 124 - (outputPID / 2.0);
   }
 
   result.veab_value1 = max(0, min(255, int(result.veab_value1)));
@@ -509,4 +628,45 @@ int lpf_function(int value, int previous_value, int initial_lpf, float coef_lpf)
   filter_value = previous_value * coef_lpf + value * (1 - coef_lpf);
 
   return filter_value;
+}
+
+//Ballistic Mode用チェック関数
+int check_function(int index){
+  //目標値にどれだけ近づいたか
+  change[index] = abs(POT_desired[index] - POT_realized[index]);
+
+  //実現値の変化率
+  speed[index] = abs(POT_realized[index] - POT_realized_previous[index]);
+
+  //目標値が変わればチェック値を初期化
+  if(abs(POT_desired[index] - POT_desired_previous[index]) > 0){
+    Ballistic_count[index] = 0;
+  }
+
+  //実現値および目標値を前回分へ格納
+  POT_realized_previous[index] = POT_realized[index];
+  POT_desired_previous[index] = POT_desired[index];
+
+  //times_range回目以降は常にPID制御
+  if(Ballistic_count[index] > times_range[index]){
+    return 0;
+  }
+
+  //初めて1を返した後、次のステップも(times_range回まで)1にする
+  if(Ballistic_count[index] > 0){
+
+    Ballistic_count[index] += 1;
+
+    return 1;
+  }
+
+  //条件を満たしているか判定
+  if((change[index] <= change_range[index]) && (speed[index] >= speed_range[index]) ){
+    Ballistic_count[index] += 1;
+
+    return 1;
+  }
+
+  return 0;
+
 }

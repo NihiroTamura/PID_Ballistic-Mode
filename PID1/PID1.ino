@@ -1,5 +1,5 @@
 /*
-【0.肩開閉、1.肩上下、2.上腕旋回、3.肘、4.前腕旋回、5.手首(小指)】用
+【0.肩開閉、1.肩上下、2.上腕旋回、3.肘、4.前腕旋回、5.手首(小指)】用 COM6
 
 2024/11/19
 PID制御とBallistic Modeの実装
@@ -138,8 +138,7 @@ int VEAB_desired[12] = {
 /*---RCフィルタ-----------------------------------------------------------------------------------------*/
 //ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期 
 //カットオフ周波数:500Hz, サンプリング周期:0.000111s(9kHz)で設定
-const float coef_lpf_veab = 0.75; //VEAB(開閉、上下、上腕) 
-const float coef_lpf_veab_elbow = 0.75; //VEAB(肘の曲げ用)
+const float coef_lpf_veab = 0.75; //VEAB
 const float coef_lpf_pot = 0.3;   //POT
 
 //ローパスフィルタの値保持変数
@@ -255,7 +254,7 @@ void setup() {
     POT_realized[4] = pot.POT4;
     POT_realized[5] = pot.POT5;
 
-    //シリアルモニタに表示(1000回ループしたら)
+    //シリアルモニタに表示(100Hz)
     if(serial_count > serial_time){
       //POT
       /*Serial.print("POT1:");
@@ -288,10 +287,10 @@ void setup() {
       Serial.println(10);*/
 
       /*Serial.print("\t POT6:");
-      Serial.print(",");*/
+      Serial.print(",");
       Serial.print(POT_realized[5]);
       Serial.print(",");
-      Serial.println(10);
+      Serial.println(10);*/
 
       //ループ回数の初期化
       serial_count = 0;
@@ -375,11 +374,7 @@ void loop() {
   for(int i = 0; i < 12; i++){
 
     //ローパスフィルタ関数呼び出し
-    if((i == 6) || (i == 7)){
-      veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab_elbow);
-    }else {
-      veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
-    }
+    veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
 
     initial_lpf_veab[i] += 1;
 
@@ -407,9 +402,9 @@ void loop() {
   /*ピン8,9
   analogWrite(PWM5_8, VEAB_desired[8]);
   analogWrite(PWM5_9, VEAB_desired[9]);*/
-  /*ピン28,29*/
+  /*ピン28,29
   analogWrite(PWM6_28, VEAB_desired[10]);
-  analogWrite(PWM6_29, VEAB_desired[11]);
+  analogWrite(PWM6_29, VEAB_desired[11]);*/
 
   //VEABの読み込み
   /*ピンA0,A1
@@ -465,10 +460,10 @@ void loop() {
     Serial.println(11);*/
 
     /*Serial.print("\t POT6:");
-    Serial.print(",");*/
+    Serial.print(",");
     Serial.print(POT_realized[5]);
     Serial.print(",");
-    Serial.println(11);
+    Serial.println(11);*/
 
 
     /*VEAB*/

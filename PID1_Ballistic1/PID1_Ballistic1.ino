@@ -1,4 +1,6 @@
 /*
+【0.肩開閉、1.肩上下、2.上腕旋回、3.肘、4.前腕旋回、5.手首(小指)】用 COM6
+
 2024/11/19
 PID制御とBallistic Modeの実装
 ROS2はなし
@@ -8,6 +10,9 @@ ROS2はなし
 
 2024/12/3
 ローパスフィルタ移動平均法適用
+
+2024/12/9
+PIDゲインチューニング完了
 
 --注意--
 使うTeensyによって、
@@ -74,20 +79,20 @@ int VEAB_realized[12] = {
 };*/
 
 /*---PID制御用-----------------------------------------------------------------------------------------*/
-//PIDゲイン肘(仮)
+//PIDゲイン
 const float kp[6] = {
-  1.0, 1.8, 0.8, 0.6, 1.2, 0.7
+  0.83, 2.1, 0.85, 0.2, 1.6, 0.6
 };
 const float ki[6] = {
-  0.0, 0.0, 0.01, 0.0, 0.0, 0.0
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  10.0, 5.0, 10.0, 5.0, 5.0, 0.0
+  20.0, 25.0, 20.0, 2.0, 0.0, 0.0
 };
 
 //目標値の設定
 int POT_desired[6] = {
-  230, 500, 113, 233, 930, 540
+  260, 548, 113, 220, 130, 500
 };//{腕の閉223-482開, 腕の下344-619上, 上腕の旋回内95-605外, 肘の伸144-740曲, 前腕の旋回内111-962外, 小指側縮62-895伸}
 
 //各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
@@ -128,18 +133,19 @@ int Ballistic_count[6] = {
   0, 0, 0, 0, 0, 0
 };
 
-int Ballistic_count1[6] = {
-  0, 0, 0, 0, 0, 0
-};
-
 //Ballistic Mode PWM値
 const int Ballistic_PWM[12] = {
   136, 120, 170, 86, 127, 129, 126, 130, 127, 129, 132, 124
 };
 
 //パラメータ
-//目標値にどれだけ近づいたか
-int change_range[6] = {
+//目標値にどれだけ近づいたかのスタートの閾値
+int change_range_start[6] = {
+  250, 100, 90, 90, 90, 90
+};
+
+//目標値にどれだけ近づいたかのストップの閾値
+int change_range_stop[6] = {
   250, 100, 90, 90, 90, 90
 };
 
@@ -185,8 +191,8 @@ int VEAB_desired[12] = {
 /*------ローパスフィルタ----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*---RCフィルタ----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 //ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
-const float coef_lpf_veab = 0.7; //VEAB(開閉、上下、上腕)
-const float coef_lpf_veab_elbow = 0.92; //VEAB(肘の曲げ用)
+//カットオフ周波数:500Hz, サンプリング周期:0.000111s(9kHz)で設定
+const float coef_lpf_veab = 0.75; //VEAB
 const float coef_lpf_pot = 0.3;   //POT
 
 //ローパスフィルタの値保持変数
@@ -242,6 +248,10 @@ std::queue<int> q5;
 int pot_sum[6] = {0};
 int POT[6] = {0};
 
+/*------シリアル通信(ダウンサンプリング)-----------------------------------------------------------------------------------------*/
+int serial_count = 0;
+int serial_time = 91;
+
 /*------プログラムスタート----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 void setup() {
 
@@ -268,23 +278,23 @@ void setup() {
 
   //VEABの初期化
   /*ピン0,1*/
-  analogWrite(PWM1_0, 255);
-  analogWrite(PWM1_1, 255);
+  analogWrite(PWM1_0, 136);
+  analogWrite(PWM1_1, 120);
   /*ピン2,3*/
-  analogWrite(PWM2_2, 255);
-  analogWrite(PWM2_3, 255);
+  analogWrite(PWM2_2, 170);
+  analogWrite(PWM2_3, 86);
   /*ピン4,5*/
-  analogWrite(PWM3_4, 255);
-  analogWrite(PWM3_5, 255);
+  analogWrite(PWM3_4, 127);
+  analogWrite(PWM3_5, 129);
   /*ピン6,7*/
   analogWrite(PWM4_6, 131);
-  analogWrite(PWM4_7, 124);
+  analogWrite(PWM4_7, 125);
   /*ピン8,9*/
-  analogWrite(PWM5_8, 255);
-  analogWrite(PWM5_9, 255);
+  analogWrite(PWM5_8, 127);
+  analogWrite(PWM5_9, 129);
   /*ピン28,29*/
-  analogWrite(PWM6_28, 255);
-  analogWrite(PWM6_29, 255);
+  analogWrite(PWM6_28, 132);
+  analogWrite(PWM6_29, 124);
 
   //POT値をシリアルモニタに表示(初回)および誤差(前回分),実現値(前回分),目標値(前回分)の初期化
   while(digitalRead(Switch) == 1){
@@ -298,54 +308,59 @@ void setup() {
     POT_realized[4] = pot.POT4;
     POT_realized[5] = pot.POT5;
 
-    //シリアルモニタに表示
-    //POT
-    /*Serial.print("POT1:");*/
-    Serial.print(POT_realized[0]);
-    Serial.print(",");
-    Serial.print(10);
-    Serial.print(",");
-    Serial.println(Ballistic_check[0]);
+    //シリアルモニタに表示(100Hz)
+    if(serial_count > serial_time){
+      //POT
+      /*Serial.print("POT1:");
+      Serial.print(POT_realized[0]);
+      Serial.print(",");
+      Serial.print(10);
+      Serial.print(",");
+      Serial.println(Ballistic_check[0]);*/
 
-    /*Serial.print("\t POT2:");
-    Serial.print(",");
-    Serial.print(POT_realized[1]);
-    Serial.print(",");
-    Serial.print(10);
-    Serial.print(",");
-    Serial.println(Ballistic_check[1]);*/
+      /*Serial.print("\t POT2:");
+      Serial.print(",");
+      Serial.print(POT_realized[1]);
+      Serial.print(",");
+      Serial.print(10);
+      Serial.print(",");
+      Serial.println(Ballistic_check[1]);*/
 
-    /*Serial.print("\t POT3:");
-    Serial.print(",");
-    Serial.print(POT_realized[2]);
-    Serial.print(",");
-    Serial.print(10);
-    Serial.print(",");
-    Serial.println(Ballistic_check[2]);*/
+      /*Serial.print("\t POT3:");
+      Serial.print(",");
+      Serial.print(POT_realized[2]);
+      Serial.print(",");
+      Serial.print(10);
+      Serial.print(",");
+      Serial.println(Ballistic_check[2]);*/
 
-    /*Serial.print("\t POT4:");
-    Serial.print(",");
-    Serial.print(POT_realized[3]);
-    Serial.print(",");
-    Serial.print(10);
-    Serial.print(",");
-    Serial.println(Ballistic_check[3]);*/
+      /*Serial.print("\t POT4:");
+      Serial.print(",");
+      Serial.print(POT_realized[3]);
+      Serial.print(",");
+      Serial.print(10);
+      Serial.print(",");
+      Serial.println(Ballistic_check[3]);*/
 
-    /*Serial.print("\t POT5:");
-    Serial.print(",");
-    Serial.print(POT_realized[4]);
-    Serial.print(",");
-    Serial.print(10);
-    Serial.print(",");
-    Serial.println(Ballistic_check[4]);*/
+      /*Serial.print("\t POT5:");
+      Serial.print(",");
+      Serial.print(POT_realized[4]);
+      Serial.print(",");
+      Serial.print(10);
+      Serial.print(",");
+      Serial.println(Ballistic_check[4]);*/
 
-    /*Serial.print("\t POT6:");
-    Serial.print(",");
-    Serial.print(POT_realized[5]);
-    Serial.print(",");
-    Serial.print(10);
-    Serial.print(",");
-    Serial.println(Ballistic_check[3]);*/
+      /*Serial.print("\t POT6:");
+      Serial.print(",");
+      Serial.print(POT_realized[5]);
+      Serial.print(",");
+      Serial.print(10);
+      Serial.print(",");
+      Serial.println(Ballistic_check[5]);*/
+
+      //ループ回数の初期化
+      serial_count = 0;
+    }
 
     //誤差(前回分)の初期化
     for(int i = 0; i < 6; i++){
@@ -361,6 +376,9 @@ void setup() {
     for(int i = 0; i < 6; i++){
       POT_desired_previous[i] = POT_desired[i];
     }
+
+    //ループの回数足し算
+    serial_count += 1;
 
   }
 
@@ -384,7 +402,7 @@ void loop() {
   POT_realized[5] = pot.POT5;
 
   //RCローパスフィルタ適用(POT肘のみ)
-  for(int i = 3; i < 4; i++){
+  /*for(int i = 3; i < 4; i++){
     
     //ローパスフィルタ関数呼び出し
     pot_filter[i] = RC_LPF(POT_realized[i], previous_value_pot[i], initial_lpf_pot[i], coef_lpf_pot);
@@ -397,7 +415,7 @@ void loop() {
     //前回のPOT値に格納
     previous_value_pot[i] = pot_filter[i];
     
-  }
+  }*/
 
 
   //PID制御&Ballistic Mode
@@ -405,13 +423,12 @@ void loop() {
     //Ballistic判定
     Ballistic_check[i] = check_function(i);
     
-    //Ballistic Mode
-    if(Ballistic_check[i] == 1){
+    //「1」ならBallistic Mode、「0」ならPID制御
+    if(Ballistic_check[i] == 1){ //Ballistic Mode
       VEAB_desired[2*i] = Ballistic_PWM[2*i];
       VEAB_desired[2*i+1] = Ballistic_PWM[2*i+1];
 
-    }else{
-      //PID制御
+    }else{ //PID制御
 
       //誤差計算
       errors[i] = POT_desired[i] - POT_realized[i];
@@ -441,11 +458,7 @@ void loop() {
   for(int i = 0; i < 12; i++){
 
     //ローパスフィルタ関数呼び出し
-    if((i == 6) || (i == 7)){
-      veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab_elbow);
-    }else {
-      veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
-    }
+    veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
 
     initial_lpf_veab[i] += 1;
 
@@ -458,9 +471,9 @@ void loop() {
   }
 
   /*------VEABへ出力-----------------------------------------------------------------------------------------*/
-  /*ピン0,1*/
+  /*ピン0,1
   analogWrite(PWM1_0, VEAB_desired[0]);
-  analogWrite(PWM1_1, VEAB_desired[1]);
+  analogWrite(PWM1_1, VEAB_desired[1]);*/
   /*ピン2,3
   analogWrite(PWM2_2, VEAB_desired[2]);
   analogWrite(PWM2_3, VEAB_desired[3]);*/
@@ -499,114 +512,123 @@ void loop() {
 
 
   /*------シリアルモニタに表示-----------------------------------------------------------------------------------------*/
-  /*POT*/
-  /*Serial.print("POT1:");*/
-  Serial.print(POT_realized[0]);
-  Serial.print(",");
-  Serial.print(11);
-  Serial.print(",");
-  Serial.println(Ballistic_check[0]);
+  if(serial_count > serial_time){
+    /*POT*/
+    /*Serial.print("POT1:");
+    Serial.print(POT_realized[0]);
+    Serial.print(",");
+    Serial.print(11);
+    Serial.print(",");
+    Serial.println(Ballistic_check[0]);*/
 
-  /*Serial.print("\t POT2:");
-  Serial.print(",");
-  Serial.print(POT_realized[1]);
-  Serial.print(",");
-  Serial.print(11);
-  Serial.print(",");
-  Serial.println(Ballistic_check[1]);*/
+    /*Serial.print("\t POT2:");
+    Serial.print(",");
+    Serial.print(POT_realized[1]);
+    Serial.print(",");
+    Serial.print(11);
+    Serial.print(",");
+    Serial.println(Ballistic_check[1]);*/
 
-  /*Serial.print("\t POT3:");
-  Serial.print(",");
-  Serial.print(POT_realized[2]);
-  Serial.print(",");
-  Serial.print(11);
-  Serial.print(",");
-  Serial.println(Ballistic_check[2]);*/
-
-
-  /*Serial.print("\t POT4:");
-  Serial.print(",");
-  Serial.print(POT_realized[3]);
-  Serial.print(",");
-  Serial.print(11);
-  Serial.print(",");
-  Serial.println(Ballistic_check[3]);*/
+    /*Serial.print("\t POT3:");
+    Serial.print(",");
+    Serial.print(POT_realized[2]);
+    Serial.print(",");
+    Serial.print(11);
+    Serial.print(",");
+    Serial.println(Ballistic_check[2]);*/
 
 
-  /*Serial.print("\t POT5:");
-  Serial.print(",");
-  Serial.print(POT_realized[4]);
-  Serial.print(",");
-  Serial.print(11);
-  Serial.print(",");
-  Serial.println(Ballistic_check[4]);*/
+    /*Serial.print("\t POT4:");
+    Serial.print(",");
+    Serial.print(POT_realized[3]);
+    Serial.print(",");
+    Serial.print(11);
+    Serial.print(",");
+    Serial.println(Ballistic_check[3]);*/
 
 
-  /*Serial.print("\t POT6:");
-  Serial.print(",");
-  Serial.print(POT_realized[5]);
-  Serial.print(",");
-  Serial.print(11);
-  Serial.print(",");
-  Serial.println(Ballistic_check[5]);*/
+    /*Serial.print("\t POT5:");
+    Serial.print(",");
+    Serial.print(POT_realized[4]);
+    Serial.print(",");
+    Serial.print(11);
+    Serial.print(",");
+    Serial.println(Ballistic_check[4]);*/
 
 
-  /*VEAB*/
-  /*Serial.print("\t VEAB1_0:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[0]);
-  //Serial.print("\t VEAB1_1:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[1]);*/
+    /*Serial.print("\t POT6:");
+    Serial.print(",");
+    Serial.print(POT_realized[5]);
+    Serial.print(",");
+    Serial.print(11);
+    Serial.print(",");
+    Serial.println(Ballistic_check[5]);*/
 
-  /*Serial.print("\t VEAB2_2:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[2]);
-  //Serial.print("\t VEAB2_3:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[3]);*/
 
-  /*Serial.print("\t VEAB3_4:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[4]);
-  //Serial.print("\t VEAB3_5:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[5]);*/
+    /*VEAB*/
+    /*Serial.print("\t VEAB1_0:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[0]);
+    //Serial.print("\t VEAB1_1:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[1]);*/
 
-  /*Serial.print("\t VEAB4_6:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[6]);
-  //Serial.print("\t VEAB4_7:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[7]);*/
+    /*Serial.print("\t VEAB2_2:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[2]);
+    //Serial.print("\t VEAB2_3:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[3]);*/
 
-  /*Serial.print("\t VEAB5_8:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[8]);
-  //Serial.print("\t VEAB5_9:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[9]);*/
+    /*Serial.print("\t VEAB3_4:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[4]);
+    //Serial.print("\t VEAB3_5:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[5]);*/
 
-  /*Serial.print("\t VEAB6_10:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[10]);
-  //Serial.print("\t VEAB6_11:");
-  Serial.print(",");
-  Serial.print(VEAB_desired[11]);*/
+    /*Serial.print("\t VEAB4_6:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[6]);
+    //Serial.print("\t VEAB4_7:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[7]);*/
 
-  /*Ballistic_check
-  Serial.print("\t 1:");
-  Serial.print(Ballistic_check[0]);
-  Serial.print("\t 2:");
-  Serial.println(Ballistic_check[1]);
-  Serial.print("\t 3:");
-  Serial.print(Ballistic_check[2]);
-  Serial.print("\t 4:");
-  Serial.print(Ballistic_check[3]);
-  Serial.print("\t 5:");
-  Serial.print(Ballistic_check[4]);
-  Serial.print("\t 6:");
-  Serial.println(Ballistic_check[5]);*/
+    /*Serial.print("\t VEAB5_8:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[8]);
+    //Serial.print("\t VEAB5_9:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[9]);*/
+
+    /*Serial.print("\t VEAB6_10:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[10]);
+    //Serial.print("\t VEAB6_11:");
+    Serial.print(",");
+    Serial.print(VEAB_desired[11]);*/
+
+    /*Ballistic_check
+    Serial.print("\t 1:");
+    Serial.print(Ballistic_check[0]);
+    Serial.print("\t 2:");
+    Serial.println(Ballistic_check[1]);
+    Serial.print("\t 3:");
+    Serial.print(Ballistic_check[2]);
+    Serial.print("\t 4:");
+    Serial.print(Ballistic_check[3]);
+    Serial.print("\t 5:");
+    Serial.print(Ballistic_check[4]);
+    Serial.print("\t 6:");
+    Serial.println(Ballistic_check[5]);*/
+
+    //ループ回数の初期化
+    serial_count = 0;
+
+  }
+
+  //ループの回数足し算
+  serial_count += 1;
 
 }
 
@@ -820,42 +842,30 @@ int check_function(int index){
   POT_desired_previous[index] = POT_desired[index];
 
 
-  if(Ballistic_count1[index] > 0){
-    if(speed[index] >= speed_range_start[index]){
-       Ballistic_count[index] = 1;
-      return 1;
-    }else{
-      Ballistic_count[index] = 0;
-      return 0;
-    }
-
-  }
-
-  //初めてBallistic Modeになった後の処理
+  //Ballistic Modeにおける判定
   if(Ballistic_count[index] > 0){
 
-    //もしspeed<speed_range_stopを満たせばPID制御をし、満たさなければBallistic Mode
-    if(change[index] <= 40){
-      Ballistic_count[index] = 0;
-      Ballistic_count1[index] = 1;
-      return 0;
-    }else if(speed[index] < speed_range_stop[index]){
+    //stop条件を満たしているか判定
+    if((change[index] <= change_range_stop[index]) && (speed[index] <= speed_range_start[index]) ){
       Ballistic_count[index] = 0;
       return 0;
-    }else{
-      Ballistic_count[index] += 1;
-      return 1;
-    }
-    
-  }
 
-  //条件を満たしているか判定
-  if((change[index] <= change_range[index]) && (speed[index] >= speed_range_start[index]) ){
-    Ballistic_count[index] += 1;
+    }
 
     return 1;
   }
 
-  return 0;
+  //PID制御における判定
+  if(Ballistic_count[index] == 0){
+
+    //start条件を満たしているか判定
+    if((change[index] <= change_range_start[index]) && (speed[index] >= speed_range_start[index]) ){
+      Ballistic_count[index] = 1;
+      return 1;
+
+    }
+    
+    return 0;
+  }
 
 }

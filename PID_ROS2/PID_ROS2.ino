@@ -32,12 +32,14 @@ const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 #include <micro_ros_arduino.h>
 #include "TeensyThreads.h"
 
+//  ROS2のおまじない
 #include <stdio.h>
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 
+//　使用するメッセージの型のライブラリ
 #include <std_msgs/msg/u_int16_multi_array.h>
 #include <std_msgs/msg/multi_array_dimension.h>
 #include <std_msgs/msg/multi_array_layout.h>
@@ -50,9 +52,11 @@ const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 // ROS2の関数fnが成功したかどうかを確認。成功したら何もせず次の処理に進み、失敗しても何もせずスルーする
 
 //------オブジェクトの定義--------------------------------------------------------------------
+//  使用するメッセージの型
 std_msgs__msg__UInt16MultiArray msg_pub;
 std_msgs__msg__UInt16MultiArray msg_sub;
 
+//  ROSのオブジェクトの定義
 rcl_subscription_t subscriber;
 rcl_publisher_t publisher;
 rclc_executor_t executor;
@@ -169,7 +173,7 @@ void setup() {
     pinMode(ain_channels[i], INPUT);
   }
 
-  // allocate message variables（pubもsubも1行目の右辺のみ変更可。その他はコピペ）
+  //------allocate message variables（pubもsubも1行目の右辺のみ変更可。その他はコピペ）--------------------------------------------------------------------
   //  1.メッセージ変数の初期化段階（メモリを確保し、デフォルト状態に設定）
   //　メッセージ変数msg_pubに対して、メモリの確保と初期化
   msg_pub.data.capacity = ANALOG_IN_CH; //  data配列の最大要素数=メッセージの要素数
@@ -197,7 +201,7 @@ void setup() {
     msg_sub.layout.dim.data[i].label.data = (char*) malloc(msg_sub.layout.dim.data[i].label.capacity * sizeof(char));
   }
 
-  // initialize message variables
+  //------initialize message variables--------------------------------------------------------------------
   //  2.メッセージ変数の設定段階（送信可能な状態に設定）
   msg_pub.data.size = ANALOG_IN_CH; //  メッセージの要素数を設定（データの実際の使用サイズ）
   msg_pub.layout.dim.size = 1;  //  メッセージのデータの次元数を設定(ex, 1 = 1次元の配列(ベクトル))
@@ -230,21 +234,21 @@ void setup() {
   // ③create node（引数：(初期化するノード, ノードの名前, ノード空間の名前, サポート構造体)）
   RCCHECK(rclc_node_init_default(&node, "micro_ros_arduino_node", "", &support));
 
-  // create subscriber（subscriberの初期化）
+  //------create subscriber（subscriberの初期化）--------------------------------------------------------------------
   RCCHECK(rclc_subscription_init_default(
     &subscriber,  //  subscriberの構造体を指定
     &node,  //  subscriberが関連付けられるノードを指定
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray), //  subscriberが受け取るメッセージの型の定義(std_msgs/msg/UInt16MultiArray 型)
     SUB_TOPICNAME));  //  subscribeするトピックの名前
 
-  // create publisher
+  //------create publisher--------------------------------------------------------------------
   RCCHECK(rclc_publisher_init_default(
     &publisher, //  publisherの構造体を指定
     &node,  //  publisherが関連付けられるノードを指定
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/UInt16MultiArray 型)
     PUB_TOPICNAME));  //  publishするトピックの名前
 
-  // create timer（timerを利用して定期的に実行するtimer_callback関数を設定）
+  //------create timer（timerを利用して定期的に実行するtimer_callback関数を設定）--------------------------------------------------------------------
   const unsigned int timer_timeout = PUB_PERIOD_MS;
   RCCHECK(rclc_timer_init_default(
     &timer, //  タイマー構造体
@@ -252,7 +256,7 @@ void setup() {
     RCL_MS_TO_NS(timer_timeout),  //  周期を指定
     timer_callback)); //  コールバック関数の指定
 
-  // create executor
+  //------create executor--------------------------------------------------------------------
   //  Executor（実行管理エンジン）を初期化（引数：(初期化するExecutor構造体, Executorが利用するROS2のコンテキスト, Executorが管理するハンドル（ex. subscribe,timer）の数, メモリ割り当て用のカスタムアロケータ)）
   RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
   //  SubscriberをExecutorに追加（引数：(初期化済みのExecutor, 追加するsubscriber構造体, subscriberが受信したメッセージ変数, subscriber用コールバック関数, 新しいデータが届いたときのみコールバックを実行する動作モード)）

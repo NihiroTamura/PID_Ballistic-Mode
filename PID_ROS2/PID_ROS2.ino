@@ -1,36 +1,46 @@
 //=============================================================================================================================================
-
+//------周期--------------------------------------------------------------------
 //　制御周期(単位：ms)
 #define CONTROL_PERIOD_MS 1
 
 //　ROSのPublishする周期(単位：ms)
 #define PUB_PERIOD_MS 10
 
-//　LEDの定義ピン
-#define LED 13
-
-// Topic names
+//------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board1/aout"
 #define PUB_TOPICNAME "/board1/ain"
 
-// AD/DA conv channels
+//------LEDの定義ピン--------------------------------------------------------------------
+#define LED 13
+
+//------AD/DA conv channels--------------------------------------------------------------------
 //　アナログ入力のピン数
-#define ANALOG_IN_CH 18
+//#define ANALOG_IN_CH 18
+#define ANALOG_IN_CH 6
 
 //　アナログ出力のピン数
 #define ANALOG_OUT_CH 12
 
+//  VEABのアナログ出力(14～25),POTのアナログ出力(26～41)
+//const int ain_channels[ANALOG_IN_CH] = {14,15,16,17,18,19,20,21,22,23,24,25,26,27,38,39,40,41};
+const int ain_channels[ANALOG_IN_CH] = {26,27,38,39,40,41};
 
-//　アナログ入出力のピンを定義
-const int ain_channels[ANALOG_IN_CH] = {14,15,16,17,18,19,20,21,22,23,24,25,26,27,38,39,40,41};
+// PWMピンの定義
 const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 
 //=============================================================================================================================================
 
 //------ライブラリのインクルード--------------------------------------------------------------------
+//  Arduino機能のライブラリ
 #include <Arduino.h>
+//  MicroRosのライブラリ
 #include <micro_ros_arduino.h>
+//  TeensyThreadsのライブラリ
 #include "TeensyThreads.h"
+
+//  キューのライブラリ
+#include <queue>
+#include <vector>
 
 //  ROS2のおまじない
 #include <stdio.h>
@@ -52,11 +62,11 @@ const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 // ROS2の関数fnが成功したかどうかを確認。成功したら何もせず次の処理に進み、失敗しても何もせずスルーする
 
 //------オブジェクトの定義--------------------------------------------------------------------
-//  使用するメッセージの型
+//  使用するROS2メッセージの型
 std_msgs__msg__UInt16MultiArray msg_pub;
 std_msgs__msg__UInt16MultiArray msg_sub;
 
-//  ROSのオブジェクトの定義
+//  ROS2のオブジェクトの定義
 rcl_subscription_t subscriber;
 rcl_publisher_t publisher;
 rclc_executor_t executor;
@@ -65,11 +75,104 @@ rcl_allocator_t allocator;
 rcl_node_t node;
 rcl_timer_t timer;
 
+//=============================================================================================================================================
+
 //------グローバル変数の定義--------------------------------------------------------------------
 //　アナログ出力の配列
 volatile uint16_t aout[12];
+
 //　アナログ入力の配列
-volatile uint16_t ain[18];
+volatile uint16_t ain[6];
+
+//  POT値
+volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
+
+//---PID制御--------------------------------------------------------------------
+//  PIDゲイン
+const float kp[6] = {
+  0.7, 2.1, 0.85, 0.2, 1.6, 0.6
+};
+const float ki[6] = {
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+};
+const float kd[6] = {
+  20.0, 25.0, 20.0, 2.0, 0.0, 0.0
+};
+
+//  目標値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
+volatile uint16_t POT_desired[6] = {
+  390, 548, 113, 220, 130, 500
+};
+
+//  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
+const int direction[6] = {-1, -1, 1, -1, -1, -1};
+
+//  各要素(自由度)の誤差
+int errors[6] = {0, 0, 0, 0, 0, 0};
+
+//  各要素(自由度)の1ステップ前の誤差
+int previous_errors[6] = {0, 0, 0, 0, 0, 0};
+
+//  各要素(自由度)の誤差の積分値
+int integral[6] = {0, 0, 0, 0, 0, 0};
+
+//  各要素(自由度)の誤差の微分値
+int de[6] = {0, 0, 0, 0, 0, 0};
+
+//  PID制御計算値
+float outputPID[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+//---VEABへのPWM信号の出力--------------------------------------------------------------------
+//  VEABへのPWM出力値用構造体
+struct Result {
+  int veab_value1;
+  int veab_value2;
+};
+
+//  VEABへのPWM出力値
+int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+//------ローパスフィルタ--------------------------------------------------------------------
+//---RCフィルタ--------------------------------------------------------------------
+//  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
+//  カットオフ周波数:Hz, サンプリング周期:で設定
+const float coef_lpf_veab = 0.75; //VEAB
+const float coef_lpf_pot = 0.3;   //POT
+
+//  ローパスフィルタの値保持変数
+int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //VEAB
+
+//  ローパスフィルタ用前回の値保持変数
+int previous_value_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //VEAB
+
+
+//  ローパスフィルタ用初回判定
+int initial_lpf_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //VEAB
+
+//---移動平均法--------------------------------------------------------------------
+//  ローパスフィルタ適用POT値格納構造体
+struct Result_LPF {
+  int POT0;
+  int POT1;
+  int POT2;
+  int POT3;
+  int POT4;
+  int POT5;
+};
+
+//  ローパスフィルタ1回目判定値
+int LPF_count = 0;
+
+//標本数
+#define LPF_kosuu 10
+
+//キューを作成
+using IntQueue = std::queue<int>;
+std::vector<IntQueue> queues(6);
+
+//移動平均法での合計値と平均値格納
+long pot_sum[6] = {0};
+int POT[6] = {0};
 
 //------スレッド間で共有リソースへのアクセスを制御するための排他制御（mutex: ミューテックス）を定義--------------------------------------------------------------------
 Threads::Mutex adc_lock;
@@ -94,22 +197,89 @@ void thread_callback() {
     //====================================
     // write codes from here
     //====================================
+    
     if(1) {
       //  スレッドセーフ(アクセスを阻止)
       Threads::Scope scope(adc_lock);
 
+      //---PID制御--------------------------------------------------------------------
+      //  移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
+      Result_LPF pot = Moving_LPF();
+      POT_realized[0] = pot.POT0;
+      POT_realized[1] = pot.POT1;
+      POT_realized[2] = pot.POT2;
+      POT_realized[3] = pot.POT3;
+      POT_realized[4] = pot.POT4;
+      POT_realized[5] = pot.POT5;
+
+      //  ROS用の配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
-        ain[i] = analogRead(ain_channels[i]);
+        ain[i] = POT_realized[i];
       }
 
-      //
-      //
-      //
-    
-      for(int i = 0; i < ANALOG_OUT_CH; i++){
-        analogWrite(aout_channels[i], aout[i]);
+      //PID制御
+      for(int i = 0; i < 6; i++){
+
+        //誤差計算
+        errors[i] = POT_desired[i] - POT_realized[i];
+
+        //誤差の積分値計算
+        integral[i] += errors[i];
+
+        //誤差の微分値計算
+        de[i] = errors[i] - previous_errors[i];
+
+        //PID制御計算
+        outputPID[i] = (kp[i] * errors[i] + ki[i] * integral[i] + kd[i] * de[i]) * direction[i];
+
+        //VEAB1とVEAB2に与えるPWMの値を計算し格納
+        Result veab = calculate_veab_Values(outputPID[i], i);
+        VEAB_desired[2*i] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
+        VEAB_desired[2*i+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
+
+        //計算に用いた誤差を前回の誤差に変更
+        previous_errors[i] = errors[i];
+
       }
+
     }
+
+    //  RCローパスフィルタ適用(VEAB)
+    for(int i = 0; i < 12; i++){
+
+      //ローパスフィルタ関数呼び出し
+      veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
+
+      initial_lpf_veab[i] += 1;
+
+      //PWM値に格納
+      VEAB_desired[i] = veab_filter[i];
+
+      //前回のVEAB値に格納
+      previous_value_veab[i] = veab_filter[i];
+      
+    }
+
+    //------VEABへ出力--------------------------------------------------------------------
+    /*ピン0,1
+    analogWrite(aout_channels[0], VEAB_desired[0]);
+    analogWrite(aout_channels[1], VEAB_desired[1]);*/
+    /*ピン2,3
+    analogWrite(aout_channels[2], VEAB_desired[2]);
+    analogWrite(aout_channels[3], VEAB_desired[3]);*/
+    /*ピン4,5
+    analogWrite(aout_channels[4], VEAB_desired[4]);
+    analogWrite(aout_channels[5], VEAB_desired[5]);*/
+    /*ピン6,7
+    analogWrite(aout_channels[6], VEAB_desired[6]);
+    analogWrite(aout_channels[7], VEAB_desired[7]);*/
+    /*ピン8,9
+    analogWrite(aout_channels[8], VEAB_desired[8]);
+    analogWrite(aout_channels[9], VEAB_desired[9]);*/
+    /*ピン28,29
+    analogWrite(aout_channels[10], VEAB_desired[10]);
+    analogWrite(aout_channels[11], VEAB_desired[11]);*/
+
     //====================================
     // to here
     //====================================
@@ -155,22 +325,124 @@ void subscription_callback(const void * msgin)
   
 }
 
+//VEAB1とVEAB2に与えるPWMの値の計算関数(Ballistic Modeにおける両ポートの値を基準に足し引きを行う)
+Result calculate_veab_Values(float outputPID, int i) {
+  Result result;
+  if(i == 0){
+    result.veab_value1 = 140 + (outputPID / 2.0);  
+    result.veab_value2 = 116 - (outputPID / 2.0);
+  } else if(i == 1){
+    result.veab_value1 = 128 + (outputPID / 2.0);  
+    result.veab_value2 = 128 - (outputPID / 2.0);
+  } else if(i == 2){
+    result.veab_value1 = 127 + (outputPID / 2.0);  
+    result.veab_value2 = 129 - (outputPID / 2.0);
+  } else if(i == 3){
+    result.veab_value1 = 136 + (outputPID / 2.0);  
+    result.veab_value2 = 120 - (outputPID / 2.0);
+  } else if(i == 4){
+    result.veab_value1 = 127 + (outputPID / 2.0);  
+    result.veab_value2 = 129 - (outputPID / 2.0);
+  } else{
+    result.veab_value1 = 132 + (outputPID / 2.0);  
+    result.veab_value2 = 124 - (outputPID / 2.0);
+  }
+
+  result.veab_value1 = max(0, min(255, int(result.veab_value1)));
+  result.veab_value2 = max(0, min(255, int(result.veab_value2)));
+
+  return result;
+}
+
+//  ローパスフィルタ(RCフィルタ)関数
+int RC_LPF(int value, int previous_value, int initial_lpf, float coef_lpf){
+  //ローパスフィルタの値初期化
+  int filter_value = 0;
+
+  //初回のみvalue値は同じものを使う
+  if(initial_lpf == 0){
+    previous_value = value;
+  }
+
+  //ローパスフィルタ計算
+  filter_value = previous_value * coef_lpf + value * (1 - coef_lpf);
+
+  return filter_value;
+}
+
+//  ローパスフィルタ(移動平均法)関数
+Result_LPF Moving_LPF() {
+  Result_LPF lpf;
+
+  //読み込んだ値potとキューの先頭の値pot_last初期化
+  int pot[6] = {0};
+  int pot_last[6] = {0};
+
+  if(LPF_count == 0){
+    //  1回目の計算
+    for (int i = 0; i < LPF_kosuu; i++){
+      for (int j = 0; j < 6; j++){
+        pot[j] = analogRead(ain_channels[j]); // アナログ値を1回だけ読み取る
+        queues[j].push(pot[j]);               // キューに追加
+        pot_sum[j] += pot[j];                 // 合計を更新
+      }
+    }
+
+    // 初期の平均値を計算
+    for (int i = 0; i < 6; i++){
+      POT[i] = pot_sum[i] / LPF_kosuu;
+    }
+
+  }else{
+    //  1回目以降の計算
+    for (int i = 0; i < 6; i++){
+      pot_last[i] = queues[i].front();        // 最初の値を取得
+      queues[i].pop();                        // 最初の値を削除
+      pot_sum[i] -= pot_last[i];              // 合計から削除した値を引く
+      pot[i] = analogRead(ain_channels[i]);   // 新しいアナログ値を1回だけ読み取る
+      queues[i].push(pot[i]);                 // キューに追加
+      pot_sum[i] += pot[i];                   // 合計に加算
+      POT[i] = pot_sum[i] / LPF_kosuu;        // 新しい平均値を計算
+    }
+
+  }
+
+  lpf.POT0 = POT[0];
+  lpf.POT1 = POT[1];
+  lpf.POT2 = POT[2];
+  lpf.POT3 = POT[3];
+  lpf.POT4 = POT[4];
+  lpf.POT5 = POT[5];
+
+  LPF_count = 1;
+
+  return lpf;
+}
+
 //=============================================================================================================================================
 
 void setup() {
   //　micro-rosの通信手段を設定
   set_microros_transports();
+
+  //  シリアル通信の初期化（ボーレートは9600bps）
+  Serial.begin(9600);
   
-  // configure LED pin
+  //  configure LED pin
   pinMode(LED, OUTPUT);
   digitalWrite(LED, HIGH);
 
-  // configure PWM/AD pins
+  //  configure PWM/AD pins
   for (size_t i = 0; i < ANALOG_OUT_CH; i++) {
     pinMode(aout_channels[i], OUTPUT);
   }
   for (size_t i = 0; i < ANALOG_IN_CH; i++) {
     pinMode(ain_channels[i], INPUT);
+  }
+
+  //  PWM周波数変更
+  for (size_t i = 0; i < ANALOG_OUT_CH; i++) {
+    analogWriteFrequency(aout_channels[i], 50000);
   }
 
   //------allocate message variables（pubもsubも1行目の右辺のみ変更可。その他はコピペ）--------------------------------------------------------------------
@@ -264,11 +536,38 @@ void setup() {
   //  timerをExecutorに追加（引数：(初期化済みのExecutor, 追加するtimer構造体)）
   RCCHECK(rclc_executor_add_timer(&executor, &timer));
 
+  //======setup関数内での実行処理==============================
+  //  VEABの初期化
+  /*ピン0,1*/
+  analogWrite(aout_channels[0], 140);
+  analogWrite(aout_channels[1], 116);
+  /*ピン2,3*/
+  analogWrite(aout_channels[2], 128);
+  analogWrite(aout_channels[3], 128);
+  /*ピン4,5*/
+  analogWrite(aout_channels[4], 127);
+  analogWrite(aout_channels[5], 129);
+  /*ピン6,7*/
+  analogWrite(aout_channels[6], 136);
+  analogWrite(aout_channels[7], 120);
+  /*ピン8,9*/
+  analogWrite(aout_channels[8], 127);
+  analogWrite(aout_channels[9], 129);
+  /*ピン28,29*/
+  analogWrite(aout_channels[10], 132);
+  analogWrite(aout_channels[11], 124);
+
+  //  移動平均法1回目の処理(ポテンショメータ)
+  Moving_LPF();
+
+  //==========================================================
+
   // turn off LED
   digitalWrite(LED, LOW);
 
-  // run the control thread（新しいスレッドの作成。thread_cakkback関数が繰り返される）
+  //------run the control thread（新しいスレッドの作成。thread_cakkback関数が繰り返される）--------------------------------------------------------------------
   threads.addThread(thread_callback);
+
 }
 
 void loop() {

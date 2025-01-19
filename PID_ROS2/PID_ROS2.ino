@@ -1,7 +1,7 @@
 //=============================================================================================================================================
 //------周期--------------------------------------------------------------------
 //　制御周期(単位：ms)
-#define CONTROL_PERIOD_MS 2
+#define CONTROL_PERIOD_MS 1
 
 //　ROSのPublishする周期(単位：ms)
 #define PUB_PERIOD_MS 10
@@ -38,9 +38,8 @@ const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 //  TeensyThreadsのライブラリ
 #include "TeensyThreads.h"
 
-//  キューのライブラリ
-#include <queue>
-#include <vector>
+//  リングバッファのライブラリ
+#include <CircularBuffer.hpp>
 
 //  ROS2のおまじない
 #include <stdio.h>
@@ -160,19 +159,18 @@ struct Result_LPF {
   int POT5;
 };
 
-//  ローパスフィルタ1回目判定値
-int LPF_count = 0;
+//  標本数
+#define LPF_kosuu 50
 
-//標本数
-#define LPF_kosuu 10
+//  使用するチャンネル数
+#define NUM_CHANNELS 6
 
-//キューを作成
-using IntQueue = std::queue<int>;
-std::vector<IntQueue> queues(6);
+//  CircularBufferを使用してリングバッファを作成
+CircularBuffer<int, LPF_kosuu> buffers[NUM_CHANNELS]; // 各チャンネル用のリングバッファ
 
 //移動平均法での合計値と平均値格納
-long pot_sum[6] = {0};
-int POT[6] = {0};
+long pot_sum[NUM_CHANNELS] = {0}; // 各チャンネルの値の合計
+int POT[NUM_CHANNELS] = {0};     // 各チャンネルの移動平均値
 
 //------スレッド間で共有リソースへのアクセスを制御するための排他制御（mutex: ミューテックス）を定義--------------------------------------------------------------------
 Threads::Mutex adc_lock;
@@ -217,32 +215,10 @@ void thread_callback() {
         ain[i] = POT_realized[i];
       }
 
-      //PID制御
-      for(int i = 0; i < 6; i++){
-
-        //誤差計算
-        errors[i] = POT_desired[i] - POT_realized[i];
-
-        //誤差の積分値計算
-        integral[i] += errors[i];
-
-        //誤差の微分値計算
-        de[i] = errors[i] - previous_errors[i];
-
-        //PID制御計算
-        outputPID[i] = (kp[i] * errors[i] + ki[i] * integral[i] + kd[i] * de[i]) * direction[i];
-
-        //VEAB1とVEAB2に与えるPWMの値を計算し格納
-        Result veab = calculate_veab_Values(outputPID[i], i);
-        VEAB_desired[2*i] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
-        VEAB_desired[2*i+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
-
-        //計算に用いた誤差を前回の誤差に変更
-        previous_errors[i] = errors[i];
-
-      }
-
     }
+
+    //  PID制御
+    PID();
 
     //  RCローパスフィルタ適用(VEAB)
     for(int i = 0; i < 12; i++){
@@ -325,6 +301,32 @@ void subscription_callback(const void * msgin)
   
 }
 
+void PID(){
+  for(int i = 0; i < 6; i++){
+
+    //誤差計算
+    errors[i] = POT_desired[i] - POT_realized[i];
+
+    //誤差の積分値計算
+    integral[i] += errors[i];
+
+    //誤差の微分値計算
+    de[i] = errors[i] - previous_errors[i];
+
+    //PID制御計算
+    outputPID[i] = (kp[i] * errors[i] + ki[i] * integral[i] + kd[i] * de[i]) * direction[i];
+
+    //VEAB1とVEAB2に与えるPWMの値を計算し格納
+    Result veab = calculate_veab_Values(outputPID[i], i);
+    VEAB_desired[2*i] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
+    VEAB_desired[2*i+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
+
+    //計算に用いた誤差を前回の誤差に変更
+    previous_errors[i] = errors[i];
+
+  }
+}
+
 //VEAB1とVEAB2に与えるPWMの値の計算関数(Ballistic Modeにおける両ポートの値を基準に足し引きを行う)
 Result calculate_veab_Values(float outputPID, int i) {
   Result result;
@@ -374,37 +376,21 @@ int RC_LPF(int value, int previous_value, int initial_lpf, float coef_lpf){
 Result_LPF Moving_LPF() {
   Result_LPF lpf;
 
-  //読み込んだ値potとキューの先頭の値pot_last初期化
-  int pot[6] = {0};
-  int pot_last[6] = {0};
+  // 各チャンネルの処理
+  for (int i = 0; i < NUM_CHANNELS; i++) {
+    int new_value = analogRead(ain_channels[i]); // 新しいアナログ値を読み取る
 
-  if(LPF_count == 0){
-    //  1回目の計算
-    for (int i = 0; i < LPF_kosuu; i++){
-      for (int j = 0; j < 6; j++){
-        pot[j] = analogRead(ain_channels[j]); // アナログ値を1回だけ読み取る
-        queues[j].push(pot[j]);               // キューに追加
-        pot_sum[j] += pot[j];                 // 合計を更新
-      }
+    // リングバッファが満杯の場合、古い値を取り出して合計から引く
+    if (buffers[i].isFull()) {
+      pot_sum[i] -= buffers[i].first(); // 最古の値を引く
     }
 
-    // 初期の平均値を計算
-    for (int i = 0; i < 6; i++){
-      POT[i] = pot_sum[i] / LPF_kosuu;
-    }
+    // 新しい値をバッファに追加し、合計を更新
+    buffers[i].push(new_value);
+    pot_sum[i] += new_value;
 
-  }else{
-    //  1回目以降の計算
-    for (int i = 0; i < 6; i++){
-      pot_last[i] = queues[i].front();        // 最初の値を取得
-      queues[i].pop();                        // 最初の値を削除
-      pot_sum[i] -= pot_last[i];              // 合計から削除した値を引く
-      pot[i] = analogRead(ain_channels[i]);   // 新しいアナログ値を1回だけ読み取る
-      queues[i].push(pot[i]);                 // キューに追加
-      pot_sum[i] += pot[i];                   // 合計に加算
-      POT[i] = pot_sum[i] / LPF_kosuu;        // 新しい平均値を計算
-    }
-
+    // 移動平均を計算
+    POT[i] = pot_sum[i] / buffers[i].size(); // バッファ内の現在の要素数で割る
   }
 
   lpf.POT0 = POT[0];
@@ -414,8 +400,6 @@ Result_LPF Moving_LPF() {
   lpf.POT4 = POT[4];
   lpf.POT5 = POT[5];
 
-  LPF_count = 1;
-
   return lpf;
 }
 
@@ -424,9 +408,6 @@ Result_LPF Moving_LPF() {
 void setup() {
   //　micro-rosの通信手段を設定
   set_microros_transports();
-
-  //  シリアル通信の初期化（ボーレートは9600bps）
-  Serial.begin(9600);
   
   //  configure LED pin
   pinMode(LED, OUTPUT);
@@ -558,7 +539,9 @@ void setup() {
   analogWrite(aout_channels[11], 124);
 
   //  移動平均法1回目の処理(ポテンショメータ)
-  Moving_LPF();
+  for (int i = 0; i < LPF_kosuu; i++){
+    Moving_LPF();
+  }
 
   //==========================================================
 

@@ -103,7 +103,7 @@ volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  310, 360, 113, 220, 130, 500
+  400, 400, 150, 370, 130, 500
 };
 
 //  parameter値
@@ -112,13 +112,13 @@ volatile uint16_t POT_desired[6] = {
 //---PID制御--------------------------------------------------------------------
 //  PIDゲイン
 const float kp[6] = {
-  1.2, 3.0, 0.0, 0.0, 0.0, 0.0
+  1.2, 3.0, 1.6, 1.2, 0.0, 0.0
 };
 const float ki[6] = {
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  30.0, 10.0, 0.0, 0.0, 0.0, 0.0
+  20.0, 10.0, 10.0, 10.0, 0.0, 0.0
 };
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
@@ -153,7 +153,7 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //---RCフィルタ--------------------------------------------------------------------
 //  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
 //  カットオフ周波数:Hz, サンプリング周期:で設定
-const float coef_lpf_veab = 0.75;   //  VEAB
+const float coef_lpf_veab = 0.52;   //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
 const float coef_lpf_pot = 0.3;     //  POT
 
@@ -295,7 +295,7 @@ void thread_callback() {
     PID();
 
     //  RCローパスフィルタ適用(VEAB)
-    for(int i = 0; i < 12; i++){
+    for(int i = 0; i < ANALOG_OUT_CH; i++){
 
       //  ローパスフィルタ関数呼び出し
       veab_filter[i] = RC_LPF_int(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);

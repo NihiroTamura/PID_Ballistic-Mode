@@ -19,6 +19,12 @@
 //------パラメータの個数--------------------------------------------------------------------
 #define PARAMETER 0
 
+//------微分値の個数--------------------------------------------------------------------
+#define OMEGA 6
+
+//------Publishするデータの個数--------------------------------------------------------------------
+#define PUBLISH 6 + OMEGA //  ANALOG_IN_CH + OMEGA
+
 //------Subscribeするデータの個数--------------------------------------------------------------------
 #define SUBSCRIBE 6 + PARAMETER //  POT_DESIRED + PARAMETER
 
@@ -90,14 +96,14 @@ rcl_timer_t timer;
 volatile uint16_t sub[SUBSCRIBE];
 
 //　publishメッセージの配列
-volatile uint16_t pub[6];
+volatile uint16_t pub[PUBLISH];
 
 //  POT値
 volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  350, 548, 113, 220, 130, 500
+  310, 360, 113, 220, 130, 500
 };
 
 //  parameter値
@@ -106,13 +112,13 @@ volatile uint16_t POT_desired[6] = {
 //---PID制御--------------------------------------------------------------------
 //  PIDゲイン
 const float kp[6] = {
-  1.0, 0.0, 0.0, 0.0, 0.0, 0.0
+  1.2, 3.0, 0.0, 0.0, 0.0, 0.0
 };
 const float ki[6] = {
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+  30.0, 10.0, 0.0, 0.0, 0.0, 0.0
 };
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
@@ -147,18 +153,21 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //---RCフィルタ--------------------------------------------------------------------
 //  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
 //  カットオフ周波数:Hz, サンプリング周期:で設定
-const float coef_lpf_veab = 0.75; //  VEAB
-const float coef_lpf_pot = 0.3;   //  POT
+const float coef_lpf_veab = 0.75;   //  VEAB
+const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
+const float coef_lpf_pot = 0.3;     //  POT
 
 //  ローパスフィルタの値保持変数
 int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //  VEAB
+float omega_filter[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};     //  角速度
 
 //  ローパスフィルタ用前回の値保持変数
 int previous_value_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //  VEAB
-
+float previous_value_omega[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};     //  角速度
 
 //  ローパスフィルタ用初回判定
 int initial_lpf_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  // VEAB
+int initial_lpf_omega[6] = {0, 0, 0, 0, 0, 0};                    //  角速度
 
 //---移動平均法--------------------------------------------------------------------
 //  ローパスフィルタ適用POT値格納構造体
@@ -189,6 +198,16 @@ Threads::Mutex adc_lock;
 
 //------subscribeの初回判定--------------------------------------------------------------------
 int sub_count = 0;
+
+//------角速度計算--------------------------------------------------------------------
+//  リングバッファの設定（データサイズは5点、6種類のデータに対応）
+CircularBuffer<int, 5> omegaBuffers[6];
+
+//  サンプリング間隔hを格納
+float h = 0.001;   //  初期値を設定（秒単位）
+
+//  角速度値
+float derivatives[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //=============================================================================================================================================
 
@@ -225,9 +244,40 @@ void thread_callback() {
       POT_realized[4] = pot.POT4;
       POT_realized[5] = pot.POT5;
 
+      // 各ポテンショメータのデータをリングバッファ(角速度計算用)に追加
+      for (int i = 0; i < OMEGA; i++) {
+        omegaBuffers[i].unshift(POT_realized[i]);
+      }
+
+      // 各ポテンショメータのデータの微分値を計算
+      for (int i = 0; i < OMEGA; i++) {
+        derivatives[i] = calculateDerivative(omegaBuffers[i]);
+      }
+
+      //  RCローパスフィルタ適用(角速度)
+      for(int i = 0; i < OMEGA; i++){
+
+        //  ローパスフィルタ関数呼び出し
+        omega_filter[i] = RC_LPF_float(derivatives[i], previous_value_omega[i], initial_lpf_omega[i], coef_lpf_omega);
+
+        initial_lpf_omega[i] = 1;
+
+        //  微分値に格納
+        derivatives[i] = omega_filter[i];
+
+        //  前回の微分値に格納
+        previous_value_omega[i] = omega_filter[i];
+        
+      }
+
       //  publishメッセージの配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
         pub[i] = POT_realized[i];
+      }
+
+      //  publishメッセージの配列に微分値を格納
+      for (int i = 0; i < OMEGA; i++){
+        pub[i+6] = abs(derivatives[i]);
       }
 
       //  subscribeしたメッセージを目標値に格納
@@ -248,9 +298,9 @@ void thread_callback() {
     for(int i = 0; i < 12; i++){
 
       //  ローパスフィルタ関数呼び出し
-      veab_filter[i] = RC_LPF(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
+      veab_filter[i] = RC_LPF_int(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
 
-      initial_lpf_veab[i] += 1;
+      initial_lpf_veab[i] = 1;
 
       //  PWM値に格納
       VEAB_desired[i] = veab_filter[i];
@@ -306,7 +356,7 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 
   if (timer != NULL) {
     //　Publlishするメッセージmsg_pubに格納
-    for (size_t i = 0; i < ANALOG_IN_CH; i++) {
+    for (size_t i = 0; i < PUBLISH; i++) {
       msg_pub.data.data[i] = pub[i];
     }
     //　メッセージをトピックに送信
@@ -385,8 +435,26 @@ Result calculate_veab_Values(float outputPID, int i) {
   return result;
 }
 
-//  ローパスフィルタ(RCフィルタ)関数
-int RC_LPF(int value, int previous_value, int initial_lpf, float coef_lpf){
+//  微分値計算関数
+float calculateDerivative(CircularBuffer<int, 5> &buffer) {
+  //  バッファに5点のデータがある場合のみ計算
+  if (buffer.size() < 5) {
+    return 0; //  データが不足している場合は0を返す
+  }
+
+  //  リングバッファからデータを取得し、float型に変換
+  float f0 = static_cast<float>(buffer[0]);
+  float f1 = static_cast<float>(buffer[1]);
+  float f2 = static_cast<float>(buffer[2]);
+  float f3 = static_cast<float>(buffer[3]);
+  float f4 = static_cast<float>(buffer[4]);
+
+  //  4階の後退差分で微分値を計算
+  return (25 * f0 - 48 * f1 + 36 * f2 - 16 * f3 + 3 * f4) / (12 * h);
+}
+
+//  ローパスフィルタ(RCフィルタ)関数※int型
+int RC_LPF_int(int value, int previous_value, int initial_lpf, float coef_lpf){
   //  ローパスフィルタの値初期化
   int filter_value = 0;
 
@@ -396,6 +464,22 @@ int RC_LPF(int value, int previous_value, int initial_lpf, float coef_lpf){
   }
 
   //  ローパスフィルタ計算
+  filter_value = previous_value * coef_lpf + value * (1 - coef_lpf);
+
+  return filter_value;
+}
+
+//  ローパスフィルタ(RCフィルタ)関数※float型
+float RC_LPF_float(float value, float previous_value, int initial_lpf, float coef_lpf){
+  //ローパスフィルタの値初期化
+  float filter_value = 0;
+
+  //初回のみvalue値は同じものを使う
+  if(initial_lpf == 0){
+    previous_value = value;
+  }
+
+  //ローパスフィルタ計算
   filter_value = previous_value * coef_lpf + value * (1 - coef_lpf);
 
   return filter_value;
@@ -458,7 +542,7 @@ void setup() {
   //------allocate message variables（pubもsubも1行目の右辺のみ変更可。その他はコピペ）--------------------------------------------------------------------
   //  1.メッセージ変数の初期化段階（メモリを確保し、デフォルト状態に設定）
   //　メッセージ変数msg_pubに対して、メモリの確保と初期化
-  msg_pub.data.capacity = ANALOG_IN_CH; //  data配列の最大要素数=メッセージの要素数
+  msg_pub.data.capacity = PUBLISH; //  data配列の最大要素数=メッセージの要素数
   msg_pub.data.size = 0;  //　メッセージ送信時のデータの初期化の保証
   msg_pub.data.data = (uint16_t*)malloc(msg_pub.data.capacity * sizeof(uint16_t));  //　data配列に必要なメモリを動的に確保
   msg_pub.layout.dim.capacity = 1;  //  1-dimentional array: vector（次元の数）
@@ -485,13 +569,13 @@ void setup() {
 
   //------initialize message variables--------------------------------------------------------------------
   //  2.メッセージ変数の設定段階（送信可能な状態に設定）
-  msg_pub.data.size = ANALOG_IN_CH; //  メッセージの要素数を設定（データの実際の使用サイズ）
+  msg_pub.data.size = PUBLISH; //  メッセージの要素数を設定（データの実際の使用サイズ）
   msg_pub.layout.dim.size = 1;  //  メッセージのデータの次元数を設定(ex, 1 = 1次元の配列(ベクトル))
   msg_pub.layout.dim.data[0].label.size = strlen(msg_pub.layout.dim.data[0].label.data);  //labelの長さを設定
-  msg_pub.layout.dim.data[0].size = ANALOG_IN_CH; //  publishするメッセージの次元のサイズを設定
-  msg_pub.layout.dim.data[0].stride = ANALOG_IN_CH; //　publishするメッセージの更新ストライドを設定
+  msg_pub.layout.dim.data[0].size = PUBLISH; //  publishするメッセージの次元のサイズを設定
+  msg_pub.layout.dim.data[0].stride = PUBLISH; //　publishするメッセージの更新ストライドを設定
   //  メッセージ変数を初期化
-  for (size_t i = 0; i < ANALOG_IN_CH; i++) {
+  for (size_t i = 0; i < PUBLISH; i++) {
     pub[i] = 0; //  pub配列（publishメッセージの値）の初期化
     msg_pub.data.data[i] = pub[i];  //  メッセージのデータ部分に初期化された値を格納
   }
@@ -572,6 +656,21 @@ void setup() {
     Moving_LPF();
   }
 
+  //  角速度計算のためポテンショメータの各データをリングバッファに追加(4階後退差分)
+  for(int i = 0; i < 5; i++){
+    Result_LPF pot = Moving_LPF();
+    POT_realized[0] = pot.POT0;
+    POT_realized[1] = pot.POT1;
+    POT_realized[2] = pot.POT2;
+    POT_realized[3] = pot.POT3;
+    POT_realized[4] = pot.POT4;
+    POT_realized[5] = pot.POT5;
+
+    for(int i = 0; i < OMEGA; i++){
+      omegaBuffers[i].unshift(POT_realized[i]);
+    }
+
+  }
 
   delay(5000);
   //==========================================================

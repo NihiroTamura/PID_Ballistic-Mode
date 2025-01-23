@@ -26,7 +26,7 @@
 #define PUBLISH 6 + OMEGA //  ANALOG_IN_CH + OMEGA
 
 //------Subscribeするデータの個数--------------------------------------------------------------------
-#define SUBSCRIBE 6 + PARAMETER //  POT_DESIRED + PARAMETER
+#define SUBSCRIBE 6 + 1 + PARAMETER //  POT_DESIRED + 7自由度目の目標値 + PARAMETER
 
 //------AD/DA conv channels--------------------------------------------------------------------
 //　アナログ入力のピン数
@@ -280,13 +280,13 @@ void thread_callback() {
         pub[i+6] = abs(derivatives[i]);
       }
 
-      //  subscribeしたメッセージを目標値に格納
+      //  subscribeしたメッセージを目標値に格納※board2のみsub[6]が目標値(Arm Robotの場合)
       for(int i = 0; i < POT_DESIRED; i++){
         if(sub_count == 0){
-          sub[i] = POT_desired[i];
+          sub[6] = POT_desired[0];
         }
 
-        POT_desired[i] = sub[i];
+        POT_desired[0] = sub[6];
       }
 
     }

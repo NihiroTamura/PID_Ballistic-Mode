@@ -7,7 +7,7 @@
 #define PUB_PERIOD_MS 10
 
 //------Topic names--------------------------------------------------------------------
-#define SUB_TOPICNAME "/board1/sub"
+#define SUB_TOPICNAME "/board/sub"
 #define PUB_TOPICNAME "/board1/pub"
 
 //------LEDの定義ピン--------------------------------------------------------------------

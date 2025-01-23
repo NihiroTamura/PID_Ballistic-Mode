@@ -29,7 +29,7 @@
 #define PUBLISH 6 + 6 + OMEGA //  ANALOG_IN_CH + BALLISTIC + OMEGA
 
 //------Subscribeするデータの個数--------------------------------------------------------------------
-#define SUBSCRIBE 6 + PARAMETER //  POT_DESIRED + PARAMETER
+#define SUBSCRIBE 6 + 1 + PARAMETER //  POT_DESIRED + 7自由度目の目標値 + PARAMETER
 
 //------AD/DA conv channels--------------------------------------------------------------------
 //　アナログ入力のピン数

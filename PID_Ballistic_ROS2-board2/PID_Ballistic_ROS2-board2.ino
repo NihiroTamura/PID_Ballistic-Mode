@@ -142,6 +142,9 @@ int de[6] = {0, 0, 0, 0, 0, 0};
 //  PID制御計算値
 float outputPID[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
+//  PID制御　PWM値
+int PID_PWM[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
 //---VEABへのPWM信号の出力--------------------------------------------------------------------
 //  VEABへのPWM出力値用構造体
 struct Result {
@@ -173,22 +176,22 @@ int speed[6] = {0, 0, 0, 0, 0, 0};
 
 //  change start value：目標値にどれだけ近づいたかのスタートの閾値
 int change_range_start[6] = {
-  150, 100, 90, 90, 90, 90
+  150, 0, 0, 0, 0, 0
 };
 
 //  change stop value：目標値にどれだけ近づいたかのストップの閾値
 int change_range_stop[6] = {
-  50, 100, 90, 90, 90, 90
+  50, 0, 0, 0, 0, 0
 };
 
 //  speed start value：角速度のスタートの閾値
 int speed_range_start[6] = {
-  3000, 6, 20, 20, 20, 20
+  6000, 0, 0, 0, 0, 0
 };
 
 //  speed stop value：角速度のストップの閾値
 int speed_range_stop[6] = {
-  1500, 3, 23, 23, 23, 23
+  4000, 0, 0, 0, 0, 0
 };
 
 //---ローパスフィルタ--------------------------------------------------------------------
@@ -344,6 +347,27 @@ void thread_callback() {
 
     }
 
+    //  PID制御PWM値計算
+    for(int i = 0; i < 6; i++){
+      PID(i);
+    }
+
+    //  RCローパスフィルタ適用(VEAB)
+    for(int i = 0; i < ANALOG_OUT_CH; i++){
+
+      //  ローパスフィルタ関数呼び出し
+      veab_filter[i] = RC_LPF_int(PID_PWM[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
+
+      initial_lpf_veab[i] = 1;
+
+      //  PWM値に格納
+      PID_PWM[i] = veab_filter[i];
+
+      //  前回のVEAB値に格納
+      previous_value_veab[i] = veab_filter[i];
+      
+    }
+
     //  PID制御 or Ballistic Mode
     for(int i = 0; i < 6; i++){
 
@@ -353,28 +377,13 @@ void thread_callback() {
         VEAB_desired[2*i+1] = Ballistic_PWM[2*i+1];
 
       }else{
-        //  PID制御
-        PID(i);
+        VEAB_desired[2*i] = PID_PWM[2*i];
+        VEAB_desired[2*i+1] = PID_PWM[2*i+1];
 
       }
 
     }
 
-    //  RCローパスフィルタ適用(VEAB)
-    for(int i = 0; i < ANALOG_OUT_CH; i++){
-
-      //  ローパスフィルタ関数呼び出し
-      veab_filter[i] = RC_LPF_int(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
-
-      initial_lpf_veab[i] = 1;
-
-      //  PWM値に格納
-      VEAB_desired[i] = veab_filter[i];
-
-      //  前回のVEAB値に格納
-      previous_value_veab[i] = veab_filter[i];
-      
-    }
 
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1
@@ -462,8 +471,8 @@ void PID(int index){
 
   //  VEAB1とVEAB2に与えるPWMの値を計算し格納
   Result veab = calculate_veab_Values(outputPID[index], index);
-  VEAB_desired[2*index] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
-  VEAB_desired[2*index+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
+  PID_PWM[2*index] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
+  PID_PWM[2*index+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
 
   //  計算に用いた誤差を前回の誤差に変更
   previous_errors[index] = errors[index];

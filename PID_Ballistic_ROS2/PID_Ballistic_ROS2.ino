@@ -106,7 +106,7 @@ volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  400, 400, 150, 370, 570, 500
+  250, 290, 90, 240, 900, 500
 };
 
 //  parameter値
@@ -115,13 +115,13 @@ volatile uint16_t POT_desired[6] = {
 //---PID制御--------------------------------------------------------------------
 //  PIDゲイン
 const float kp[6] = {
-  1.2, 3.0, 1.6, 1.2, 2.3, 0.5
+  1.0, 3.0, 1.6, 1.2, 2.3, 0.5
 };
 const float ki[6] = {
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  20.0, 10.0, 10.0, 10.0, 10.0, 1.0
+  10.0, 10.0, 10.0, 10.0, 10.0, 1.0
 };
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
@@ -141,6 +141,9 @@ int de[6] = {0, 0, 0, 0, 0, 0};
 
 //  PID制御計算値
 float outputPID[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+//  PID制御　PWM値
+int PID_PWM[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 //---VEABへのPWM信号の出力--------------------------------------------------------------------
 //  VEABへのPWM出力値用構造体
@@ -173,22 +176,22 @@ int speed[6] = {0, 0, 0, 0, 0, 0};
 
 //  change start value：目標値にどれだけ近づいたかのスタートの閾値
 int change_range_start[6] = {
-  150, 100, 90, 90, 90, 90
+  140, 150, 150, 150, 150, 150
 };
 
 //  change stop value：目標値にどれだけ近づいたかのストップの閾値
 int change_range_stop[6] = {
-  50, 100, 90, 90, 90, 90
+  100, 50, 50, 50, 50, 50
 };
 
 //  speed start value：角速度のスタートの閾値
 int speed_range_start[6] = {
-  3000, 6, 20, 20, 20, 20
+  1500, 3000, 4000, 4000, 6000, 3000
 };
 
 //  speed stop value：角速度のストップの閾値
 int speed_range_stop[6] = {
-  1500, 3, 23, 23, 23, 23
+  1000, 2000, 2500, 3000, 4000, 2500
 };
 
 //---ローパスフィルタ--------------------------------------------------------------------
@@ -344,6 +347,27 @@ void thread_callback() {
 
     }
 
+    //  PID制御PWM値計算
+    for(int i = 0; i < 6; i++){
+      PID(i);
+    }
+
+    //  RCローパスフィルタ適用(VEAB)
+    for(int i = 0; i < ANALOG_OUT_CH; i++){
+
+      //  ローパスフィルタ関数呼び出し
+      veab_filter[i] = RC_LPF_int(PID_PWM[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
+
+      initial_lpf_veab[i] = 1;
+
+      //  PWM値に格納
+      PID_PWM[i] = veab_filter[i];
+
+      //  前回のVEAB値に格納
+      previous_value_veab[i] = veab_filter[i];
+      
+    }
+
     //  PID制御 or Ballistic Mode
     for(int i = 0; i < 6; i++){
 
@@ -353,28 +377,13 @@ void thread_callback() {
         VEAB_desired[2*i+1] = Ballistic_PWM[2*i+1];
 
       }else{
-        //  PID制御
-        PID(i);
+        VEAB_desired[2*i] = PID_PWM[2*i];
+        VEAB_desired[2*i+1] = PID_PWM[2*i+1];
 
       }
 
     }
 
-    //  RCローパスフィルタ適用(VEAB)
-    for(int i = 0; i < ANALOG_OUT_CH; i++){
-
-      //  ローパスフィルタ関数呼び出し
-      veab_filter[i] = RC_LPF_int(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
-
-      initial_lpf_veab[i] = 1;
-
-      //  PWM値に格納
-      VEAB_desired[i] = veab_filter[i];
-
-      //  前回のVEAB値に格納
-      previous_value_veab[i] = veab_filter[i];
-      
-    }
 
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1
@@ -462,8 +471,8 @@ void PID(int index){
 
   //  VEAB1とVEAB2に与えるPWMの値を計算し格納
   Result veab = calculate_veab_Values(outputPID[index], index);
-  VEAB_desired[2*index] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
-  VEAB_desired[2*index+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
+  PID_PWM[2*index] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
+  PID_PWM[2*index+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
 
   //  計算に用いた誤差を前回の誤差に変更
   previous_errors[index] = errors[index];

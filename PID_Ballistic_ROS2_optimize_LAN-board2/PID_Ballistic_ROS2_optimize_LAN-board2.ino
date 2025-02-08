@@ -190,7 +190,7 @@ int change_range_stop[6] = {
 
 //  speed start value：角速度のスタートの閾値
 int speed_range_start[6] = {
-  6000, 10, 10, 10, 10, 10
+  9000, 10, 10, 10, 10, 10
 };
 
 //  speed stop value：角速度のストップの閾値
@@ -325,11 +325,6 @@ void thread_callback() {
         
       }
 
-      //  PID制御 or Ballistic Mode判定
-      for(int i = 0; i < BALLISTIC; i++){
-        Ballistic_check[i] = check_function(i);
-      }
-
       //---ROS2メッセージに格納--------------------------------------------------------------------
       //  publishメッセージの配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
@@ -339,11 +334,6 @@ void thread_callback() {
       //  publishメッセージの配列に微分値(絶対値)を格納
       for (int i = 0; i < OMEGA; i++){
         pub[i+6] = abs(derivatives[i]);
-      }
-
-      //  publishメッセージの配列にBallistic Mode判定値を格納
-      for(int i = 0; i < BALLISTIC; i++){
-        pub[i+12] = Ballistic_check[i];
       }
 
       //  subscribeしたメッセージを目標値に格納※board2のみsub[6]が目標値(Arm Robotの場合)
@@ -369,6 +359,16 @@ void thread_callback() {
         speed_range_start[0] = sub[33];
         speed_range_stop[0] = sub[34];
 
+      }
+
+      //  PID制御 or Ballistic Mode判定
+      for(int i = 0; i < BALLISTIC; i++){
+        Ballistic_check[i] = check_function(i);
+      }
+
+      //  publishメッセージの配列にBallistic Mode判定値を格納
+      for(int i = 0; i < BALLISTIC; i++){
+        pub[i+12] = Ballistic_check[i];
       }
 
     }
@@ -410,11 +410,10 @@ void thread_callback() {
 
     }
 
-
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1*/
+    /*ピン0,1
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);
+    analogWrite(aout_channels[1], VEAB_desired[1]);*/
     /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
     analogWrite(aout_channels[3], VEAB_desired[3]);*/
@@ -582,6 +581,11 @@ int check_function(int index){
   //  PID制御における判定
   //  start条件（PID → Ballistic Mode）の判定
   if( (change[index] <= change_range_start[index]) && (speed[index] >= speed_range_start[index]) ){
+    //  PID → Ballistic Mode条件とBallisti Mode → PID条件を両方満たすならPID制御を優先
+    if( (change[index] <= change_range_stop[index]) && (speed[index] <= speed_range_stop[index])){
+      return 0;
+    }
+
     return 1;
   }
 
@@ -665,6 +669,9 @@ void setup() {
   //   Teensyをmicro-ROSエージェントに接続するためのEthernet UDP設定(引数：MACアドレス, TeensyのIP, micro-ROSエージェントのIP, ポート番号)
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
   
+  //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
+  //Serial.begin(9600);
+
   //  configure LED pin
   pinMode(LED, OUTPUT);
   digitalWrite(LED, HIGH);

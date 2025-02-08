@@ -315,11 +315,6 @@ void thread_callback() {
         
       }
 
-      //  PID制御 or Ballistic Mode判定
-      for(int i = 0; i < BALLISTIC; i++){
-        Ballistic_check[i] = check_function(i);
-      }
-
       //---ROS2メッセージに格納--------------------------------------------------------------------
       //  publishメッセージの配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
@@ -331,11 +326,6 @@ void thread_callback() {
         pub[i+6] = abs(derivatives[i]);
       }
 
-      //  publishメッセージの配列にBallistic Mode判定値を格納
-      for(int i = 0; i < BALLISTIC; i++){
-        pub[i+12] = Ballistic_check[i];
-      }
-
       //  subscribeしたメッセージを目標値に格納
       for(int i = 0; i < POT_DESIRED; i++){
         if(sub_count == 0){
@@ -343,6 +333,16 @@ void thread_callback() {
         }
 
         POT_desired[i] = sub[i];
+      }
+
+      //  PID制御 or Ballistic Mode判定
+      for(int i = 0; i < BALLISTIC; i++){
+        Ballistic_check[i] = check_function(i);
+      }
+
+      //  publishメッセージの配列にBallistic Mode判定値を格納
+      for(int i = 0; i < BALLISTIC; i++){
+        pub[i+12] = Ballistic_check[i];
       }
 
     }
@@ -556,6 +556,11 @@ int check_function(int index){
   //  PID制御における判定
   //  start条件（PID → Ballistic Mode）の判定
   if( (change[index] <= change_range_start[index]) && (speed[index] >= speed_range_start[index]) ){
+    //  PID → Ballistic Mode条件とBallisti Mode → PID条件を両方満たすならPID制御を優先
+    if( (change[index] <= change_range_stop[index]) && (speed[index] <= speed_range_stop[index])){
+      return 0;
+    }
+
     return 1;
   }
 

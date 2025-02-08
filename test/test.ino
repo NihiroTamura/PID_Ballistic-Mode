@@ -1,25 +1,7 @@
+#include <micro_ros_arduino.h>
+
 /*
-【0.肩開閉、1.肩上下、2.上腕旋回、3.肘、4.前腕旋回、5.手首(小指)】用 COM6
-
-2024/11/19
-PID制御とBallistic Modeの実装
-ROS2はなし
-
-2024/11/21
-ローパスフィルタ適用(POT, VEAB)
-
-2024/12/3
-ローパスフィルタ移動平均法適用
-
-2024/12/9
-PIDゲインチューニング完了
-
---注意--
-使うTeensyによって、
-1.PIDゲイン
-2.Ballistic Modeのパラメータ値
-3.圧力の正方向パラメータdirection
-を変更！
+テスト用プログラム
 */
 
 /*------ライブラリインクルード----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -63,9 +45,6 @@ PIDゲインチューニング完了
 #define POT5_A16 A16
 #define POT6_A17 A17
 
-//スイッチの定義
-#define Switch 33 //スタートボタン
-#define Switch_emergency 34 //緊急ボタン
 
 /*------変数の初期化----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 //POTの値を初期化
@@ -73,10 +52,10 @@ int POT_realized[6] = {
   0, 0, 0, 0, 0, 0
 };
 
-/*VEABの値を初期化*/
+/*VEABの値を初期化
 int VEAB_realized[12] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
+};*/
 
 /*---PID制御用-----------------------------------------------------------------------------------------*/
 //PIDゲイン
@@ -204,10 +183,6 @@ void setup() {
   //シリアル通信を初期化する。ボーレートは9600bps
   Serial.begin(9600);
 
-  //スイッチのモード設定
-  pinMode(Switch, INPUT_PULLUP);
-  pinMode(Switch_emergency, INPUT_PULLUP);
-
   //PWM周波数変更
   analogWriteFrequency(PWM1_0, 50000);
   analogWriteFrequency(PWM1_1, 50000);
@@ -242,81 +217,47 @@ void setup() {
   analogWrite(PWM6_28, 132);
   analogWrite(PWM6_29, 124);
 
-  //POT値をシリアルモニタに表示(初回)および誤差(前回分)の初期化
-  while(digitalRead(Switch) == 1){
 
-    //移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
-    Result_LPF pot = Moving_LPF();
-    POT_realized[0] = pot.POT0;
-    POT_realized[1] = pot.POT1;
-    POT_realized[2] = pot.POT2;
-    POT_realized[3] = pot.POT3;
-    POT_realized[4] = pot.POT4;
-    POT_realized[5] = pot.POT5;
+  //移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
+  Result_LPF pot = Moving_LPF();
+  POT_realized[0] = pot.POT0;
+  POT_realized[1] = pot.POT1;
+  POT_realized[2] = pot.POT2;
+  POT_realized[3] = pot.POT3;
+  POT_realized[4] = pot.POT4;
+  POT_realized[5] = pot.POT5;
 
-    //シリアルモニタに表示(100Hz)
-    if(serial_count > serial_time){
-      //POT
-      /*Serial.print("POT1:");*/
-      Serial.print(POT_realized[0]);
-      Serial.print(",");
-      Serial.println(10);
 
-      /*Serial.print("\t POT2:");
-      Serial.print(",");
-      Serial.print(POT_realized[1]);
-      Serial.print(",");
-      Serial.println(10);*/
+  /*シリアルモニタに表示*/
+  /**/Serial.print("POT1:");
+  Serial.println(POT_realized[0]);
 
-      /*Serial.print("\t POT3:");
-      Serial.print(",");
-      Serial.print(POT_realized[2]);
-      Serial.print(",");
-      Serial.println(10);*/
+  /*Serial.print("\t POT2:");
+  Serial.print(POT_realized[1]);*/
 
-      /*Serial.print("\t POT4:");
-      Serial.print(",");
-      Serial.print(POT_realized[3]);
-      Serial.print(",");
-      Serial.println(10);*/
+  /*Serial.print("\t POT3:");
+  Serial.print(POT_realized[2]);*/
 
-      /*Serial.print("\t POT5:");
-      Serial.print(",");
-      Serial.print(POT_realized[4]);
-      Serial.print(",");
-      Serial.println(10);*/
+  /*Serial.print("\t POT4:");
+  Serial.print(POT_realized[3]);*/
 
-      /*Serial.print("\t POT6:");
-      Serial.print(",");
-      Serial.print(POT_realized[5]);
-      Serial.print(",");
-      Serial.println(10);*/
+  /*Serial.print("\t POT5:");
+  Serial.print(POT_realized[4]);*/
 
-      //ループ回数の初期化
-      serial_count = 0;
-    }
+  /*Serial.print("\t POT6:");
+  Serial.println(POT_realized[5]);*/
 
-    //誤差(前回分)の初期化
-    for(int i = 0; i < 6; i++){
-      previous_errors[i] = POT_desired[i] - POT_realized[i];
-    }
 
-    //ループの回数足し算
-    serial_count += 1;
-
+  //誤差(前回分)の初期化
+  for(int i = 0; i < 6; i++){
+    previous_errors[i] = POT_desired[i] - POT_realized[i];
   }
-
-  // 緊急ボタンの処理
-  attachInterrupt(digitalPinToInterrupt(Switch_emergency), Emergency_function, FALLING);
 
 }
 
 
 /*------ループ処理----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 void loop() {
-  /*
-  unsigned long ts, te;
-  ts = micros();*/
 
   /*------PID制御-----------------------------------------------------------------------------------------*/
   //移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
@@ -327,22 +268,6 @@ void loop() {
   POT_realized[3] = pot.POT3;
   POT_realized[4] = pot.POT4;
   POT_realized[5] = pot.POT5;
-
-  //RCローパスフィルタ適用(POT肘のみ)
-  /*for(int i = 3; i < 4; i++){
-    
-    //ローパスフィルタ関数呼び出し
-    pot_filter[i] = RC_LPF(POT_realized[i], previous_value_pot[i], initial_lpf_pot[i], coef_lpf_pot);
-
-    initial_lpf_pot[i] += 1;
-
-    //POT値に格納
-    POT_realized[i] = pot_filter[i];
-
-    //前回のPOT値に格納
-    previous_value_pot[i] = pot_filter[i];
-    
-  }*/
 
 
   //PID制御
@@ -387,29 +312,46 @@ void loop() {
   }
 
   /*------VEABへ出力-----------------------------------------------------------------------------------------*/
-  /*ピン0,1*/
+  /*ピン0,1
   analogWrite(PWM1_0, VEAB_desired[0]);
   analogWrite(PWM1_1, VEAB_desired[1]);
+  analogWrite(PWM1_0, 0);
+  analogWrite(PWM1_1, 255);*/
+
   /*ピン2,3
   analogWrite(PWM2_2, VEAB_desired[2]);
-  analogWrite(PWM2_3, VEAB_desired[3]);*/
+  analogWrite(PWM2_3, VEAB_desired[3]);
+  analogWrite(PWM2_2, 0);
+  analogWrite(PWM2_3, 255);*/
+
   /*ピン4,5
   analogWrite(PWM3_4, VEAB_desired[4]);
-  analogWrite(PWM3_5, VEAB_desired[5]);*/
+  analogWrite(PWM3_5, VEAB_desired[5]);
+  analogWrite(PWM3_4, 255);
+  analogWrite(PWM3_5, 0);*/
+
   /*ピン6,7
   analogWrite(PWM4_6, VEAB_desired[6]);
-  analogWrite(PWM4_7, VEAB_desired[7]);*/
+  analogWrite(PWM4_7, VEAB_desired[7]);
+  analogWrite(PWM4_6, 255);
+  analogWrite(PWM4_7, 0);*/
+
   /*ピン8,9
   analogWrite(PWM5_8, VEAB_desired[8]);
-  analogWrite(PWM5_9, VEAB_desired[9]);*/
+  analogWrite(PWM5_9, VEAB_desired[9]);
+  analogWrite(PWM5_8, 0);
+  analogWrite(PWM5_9, 255);*/
+
   /*ピン28,29
   analogWrite(PWM6_28, VEAB_desired[10]);
-  analogWrite(PWM6_29, VEAB_desired[11]);*/
+  analogWrite(PWM6_29, VEAB_desired[11]);
+  analogWrite(PWM6_28, 0);
+  analogWrite(PWM6_29, 255);*/
 
   //VEABの読み込み
-  /*ピンA0,A1*/
+  /*ピンA0,A1
   VEAB_realized[0] = analogRead(VEAB1_A0);
-  VEAB_realized[1] = analogRead(VEAB1_A1);
+  VEAB_realized[1] = analogRead(VEAB1_A1);*/
   /*ピンA2,A3
   VEAB_realized[2] = analogRead(VEAB2_A2);
   VEAB_realized[3] = analogRead(VEAB2_A3);*/
@@ -428,99 +370,74 @@ void loop() {
 
 
   /*------シリアルモニタに表示-----------------------------------------------------------------------------------------*/
-  if(serial_count > serial_time){
-    /*POT*/
-    /*Serial.print("POT1:");*/
-    Serial.print(POT_realized[0]);
-    Serial.print(",");
-    Serial.println(11);
+  /*POT*/
+  /**/Serial.print("POT1:");
+  Serial.println(POT_realized[0]);
 
-    /*Serial.print("\t POT2:");
-    Serial.print(",");
-    Serial.print(POT_realized[1]);
-    Serial.print(",");
-    Serial.println(11);*/
+  /*Serial.print("\t POT2:");
+  Serial.print(POT_realized[1]);*/
 
-    /*Serial.print("\t POT3:");
-    Serial.print(",");
-    Serial.print(POT_realized[2]);
-    Serial.print(",");
-    Serial.println(11);*/
+  /*Serial.print("\t POT3:");
+  Serial.print(POT_realized[2]);*/
 
-    /*Serial.print("\t POT4:");
-    Serial.print(",");
-    Serial.print(POT_realized[3]);
-    Serial.print(",");
-    Serial.print(11);*/
+  /*Serial.print("\t POT4:");
+  Serial.print(POT_realized[3]);*/
 
-    /*Serial.print("\t POT5:");
-    Serial.print(",");
-    Serial.print(POT_realized[4]);
-    Serial.print(",");
-    Serial.println(11);*/
+  /*Serial.print("\t POT5:");
+  Serial.print(POT_realized[4]);*/
 
-    /*Serial.print("\t POT6:");
-    Serial.print(",");
-    Serial.print(POT_realized[5]);
-    Serial.print(",");
-    Serial.println(11);*/
+  /*Serial.print("\t POT6:");
+  Serial.println(POT_realized[5]);*/
 
 
-    /*VEAB*/
-    /*Serial.print("\t VEAB1_0:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[0]);
-    //Serial.print("\t VEAB1_1:");
-    Serial.print(",");
-    Serial.println(VEAB_desired[1]);*/
+  /*VEAB*/
+  /*Serial.print("\t VEAB1_0:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[0]);
+  //Serial.print("\t VEAB1_1:");
+  Serial.print(",");
+  Serial.println(VEAB_desired[1]);*/
 
-    /*Serial.print("\t VEAB2_2:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[2]);
-    Serial.print("\t VEAB2_3:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[3]);*/
+  /*Serial.print("\t VEAB2_2:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[2]);
+  Serial.print("\t VEAB2_3:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[3]);*/
 
-    /*Serial.print("\t VEAB3_4:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[4]);
-    Serial.print("\t VEAB3_5:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[5]);*/
+  /*Serial.print("\t VEAB3_4:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[4]);
+  Serial.print("\t VEAB3_5:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[5]);*/
 
-    /*Serial.print("\t VEAB4_6:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[6]);
-    //Serial.print("\t VEAB4_7:");
-    Serial.print(",");
-    Serial.println(VEAB_desired[7]);*/
+  /*Serial.print("\t VEAB4_6:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[6]);
+  //Serial.print("\t VEAB4_7:");
+  Serial.print(",");
+  Serial.println(VEAB_desired[7]);*/
 
-    /*Serial.print("\t VEAB5_8:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[8]);
-    Serial.print("\t VEAB5_9:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[9]);*/
+  /*Serial.print("\t VEAB5_8:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[8]);
+  Serial.print("\t VEAB5_9:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[9]);*/
 
-    /*Serial.print("\t VEAB6_10:");
-    Serial.print(",");
-    Serial.print(VEAB_desired[10]);
-    Serial.print("\t VEAB6_11:");
-    Serial.print(",");
-    Serial.println(VEAB_desired[11]);*/
-    
-    //ループ回数の初期化
-    serial_count = 0;
-
-  }
+  /*Serial.print("\t VEAB6_10:");
+  Serial.print(",");
+  Serial.print(VEAB_desired[10]);
+  Serial.print("\t VEAB6_11:");
+  Serial.print(",");
+  Serial.println(VEAB_desired[11]);*/
 
   /*
   te = micros();
   Serial.print("\t Time:");
   Serial.println(te - ts); // μs*/
 
-  //ループの回数足し算
-  serial_count += 1;
 
 }
 

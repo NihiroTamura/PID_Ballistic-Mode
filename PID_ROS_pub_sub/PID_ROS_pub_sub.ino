@@ -8,7 +8,7 @@
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board/sub"
-#define PUB_TOPICNAME "/board2/pub"
+#define PUB_TOPICNAME "/board1/pub"
 
 //------LEDの定義ピン--------------------------------------------------------------------
 #define LED 13
@@ -22,11 +22,8 @@
 //------微分値の個数--------------------------------------------------------------------
 #define OMEGA 6
 
-//------Ballistic Modeの判定値の個数--------------------------------------------------------------------
-#define BALLISTIC 6
-
 //------Publishするデータの個数--------------------------------------------------------------------
-#define PUBLISH 6 + 6 + OMEGA //  ANALOG_IN_CH + BALLISTIC + OMEGA
+#define PUBLISH 6 + OMEGA //  ANALOG_IN_CH + OMEGA
 
 //------Subscribeするデータの個数--------------------------------------------------------------------
 #define SUBSCRIBE 6 + 1 + PARAMETER //  POT_DESIRED + 7自由度目の目標値 + PARAMETER
@@ -104,9 +101,9 @@ volatile uint16_t pub[PUBLISH];
 //  POT値
 volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
-//  目標値の初期値{親指側縮1-649伸, - , -, - , - , -}
+//  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  600, 0, 0, 0, 0, 0
+  400, 400, 150, 370, 570, 500
 };
 
 //  parameter値
@@ -115,17 +112,17 @@ volatile uint16_t POT_desired[6] = {
 //---PID制御--------------------------------------------------------------------
 //  PIDゲイン
 const float kp[6] = {
-  0.6, 0.0, 0.0, 0.0, 0.0, 0.0
+  1.2, 3.0, 1.6, 1.2, 2.3, 0.5
 };
 const float ki[6] = {
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  1.0, 0.0, 0.0, 0.0, 0.0, 0.0
+  20.0, 10.0, 10.0, 10.0, 10.0, 1.0
 };
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
-const int direction[6] = {-1, 0, 0, 0, 0, 0};
+const int direction[6] = {-1, -1, 1, -1, -1, -1};
 
 //  各要素(自由度)の誤差
 int errors[6] = {0, 0, 0, 0, 0, 0};
@@ -142,9 +139,6 @@ int de[6] = {0, 0, 0, 0, 0, 0};
 //  PID制御計算値
 float outputPID[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-//  PID制御　PWM値
-int PID_PWM[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
 //---VEABへのPWM信号の出力--------------------------------------------------------------------
 //  VEABへのPWM出力値用構造体
 struct Result {
@@ -155,47 +149,8 @@ struct Result {
 //  VEABへのPWM出力値
 int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-//---Ballistic Mode--------------------------------------------------------------------
-//  Ballistic Mode判定値
-int Ballistic_check[6] = {0, 0, 0, 0, 0, 0};
-
-//  Ballistic Mode PWM値
-const int Ballistic_PWM[12] = {
-  132, 124, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
-};
-
-//  1つ前の目標値
-int POT_desired_previous[6] = {0, 0, 0, 0, 0, 0};
-
-//--Parameter--------------------------------------------------------------------
-//  目標値までの距離：change = abs(POT_desired[i] - POT_realized[i])
-int change[6] = {0, 0, 0, 0, 0, 0};
-
-//  角速度
-int speed[6] = {0, 0, 0, 0, 0, 0};
-
-//  change start value：目標値にどれだけ近づいたかのスタートの閾値
-int change_range_start[6] = {
-  150, 0, 0, 0, 0, 0
-};
-
-//  change stop value：目標値にどれだけ近づいたかのストップの閾値
-int change_range_stop[6] = {
-  50, 0, 0, 0, 0, 0
-};
-
-//  speed start value：角速度のスタートの閾値
-int speed_range_start[6] = {
-  6000, 0, 0, 0, 0, 0
-};
-
-//  speed stop value：角速度のストップの閾値
-int speed_range_stop[6] = {
-  4000, 0, 0, 0, 0, 0
-};
-
-//---ローパスフィルタ--------------------------------------------------------------------
-//--RCフィルタ--------------------------------------------------------------------
+//------ローパスフィルタ--------------------------------------------------------------------
+//---RCフィルタ--------------------------------------------------------------------
 //  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
 //  カットオフ周波数:Hz, サンプリング周期:で設定
 const float coef_lpf_veab = 0.52;   //  VEAB(カットオフ周波数150Hz)
@@ -214,7 +169,7 @@ float previous_value_omega[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};     //  角速�
 int initial_lpf_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  // VEAB
 int initial_lpf_omega[6] = {0, 0, 0, 0, 0, 0};                    //  角速度
 
-//--移動平均法--------------------------------------------------------------------
+//---移動平均法--------------------------------------------------------------------
 //  ローパスフィルタ適用POT値格納構造体
 struct Result_LPF {
   int POT0;
@@ -238,13 +193,13 @@ CircularBuffer<int, LPF_KOSUU> buffers[NUM_CHANNELS]; //  各チャンネル用�
 long pot_sum[NUM_CHANNELS] = {0}; //  各チャンネルの値の合計
 int POT[NUM_CHANNELS] = {0};      //  各チャンネルの移動平均値
 
-//---スレッド間で共有リソースへのアクセスを制御するための排他制御（mutex: ミューテックス）を定義--------------------------------------------------------------------
+//------スレッド間で共有リソースへのアクセスを制御するための排他制御（mutex: ミューテックス）を定義--------------------------------------------------------------------
 Threads::Mutex adc_lock;
 
-//---subscribeの初回判定--------------------------------------------------------------------
+//------subscribeの初回判定--------------------------------------------------------------------
 int sub_count = 0;
 
-//---角速度計算--------------------------------------------------------------------
+//------角速度計算--------------------------------------------------------------------
 //  リングバッファの設定（データサイズは5点、6種類のデータに対応）
 CircularBuffer<int, 5> omegaBuffers[6];
 
@@ -279,7 +234,7 @@ void thread_callback() {
       //  スレッドセーフ(アクセスを阻止)
       Threads::Scope scope(adc_lock);
 
-      //---データ取得--------------------------------------------------------------------
+      //---PID制御--------------------------------------------------------------------
       //  移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
       Result_LPF pot = Moving_LPF();
       POT_realized[0] = pot.POT0;
@@ -315,75 +270,45 @@ void thread_callback() {
         
       }
 
-      //  PID制御 or Ballistic Mode判定
-      for(int i = 0; i < BALLISTIC; i++){
-        Ballistic_check[i] = check_function(i);
-      }
-
-      //---ROS2メッセージに格納--------------------------------------------------------------------
       //  publishメッセージの配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
         pub[i] = POT_realized[i];
       }
 
-      //  publishメッセージの配列に微分値(絶対値)を格納
+      //  publishメッセージの配列に微分値を格納
       for (int i = 0; i < OMEGA; i++){
         pub[i+6] = abs(derivatives[i]);
       }
 
-      //  publishメッセージの配列にBallistic Mode判定値を格納
-      for(int i = 0; i < BALLISTIC; i++){
-        pub[i+12] = Ballistic_check[i];
-      }
-
-      //  subscribeしたメッセージを目標値に格納※board2のみsub[6]が目標値(Arm Robotの場合)
+      //  subscribeしたメッセージを目標値に格納
       for(int i = 0; i < POT_DESIRED; i++){
         if(sub_count == 0){
-          sub[6] = POT_desired[0];
+          sub[i] = POT_desired[i];
         }
 
-        POT_desired[0] = sub[6];
+        POT_desired[i] = sub[i];
       }
 
     }
 
-    //  PID制御PWM値計算
-    for(int i = 0; i < 6; i++){
-      PID(i);
-    }
+    //  PID制御
+    PID();
 
     //  RCローパスフィルタ適用(VEAB)
     for(int i = 0; i < ANALOG_OUT_CH; i++){
 
       //  ローパスフィルタ関数呼び出し
-      veab_filter[i] = RC_LPF_int(PID_PWM[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
+      veab_filter[i] = RC_LPF_int(VEAB_desired[i], previous_value_veab[i], initial_lpf_veab[i], coef_lpf_veab);
 
       initial_lpf_veab[i] = 1;
 
       //  PWM値に格納
-      PID_PWM[i] = veab_filter[i];
+      VEAB_desired[i] = veab_filter[i];
 
       //  前回のVEAB値に格納
       previous_value_veab[i] = veab_filter[i];
       
     }
-
-    //  PID制御 or Ballistic Mode
-    for(int i = 0; i < 6; i++){
-
-      //  「1」ならBallistic Mode、「0」ならPID制御 
-      if(Ballistic_check[i] == 1){
-        VEAB_desired[2*i] = Ballistic_PWM[2*i];
-        VEAB_desired[2*i+1] = Ballistic_PWM[2*i+1];
-
-      }else{
-        VEAB_desired[2*i] = PID_PWM[2*i];
-        VEAB_desired[2*i+1] = PID_PWM[2*i+1];
-
-      }
-
-    }
-
 
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1
@@ -455,51 +380,53 @@ void subscription_callback(const void * msgin)
 }
 
 //  PID制御関数
-void PID(int index){
+void PID(){
+  for(int i = 0; i < 6; i++){
 
-  //  誤差計算
-  errors[index] = POT_desired[index] - POT_realized[index];
+    //  誤差計算
+    errors[i] = POT_desired[i] - POT_realized[i];
 
-  //  誤差の積分値計算
-  integral[index] += errors[index];
+    //  誤差の積分値計算
+    integral[i] += errors[i];
 
-  //  誤差の微分値計算
-  de[index] = errors[index] - previous_errors[index];
+    //  誤差の微分値計算
+    de[i] = errors[i] - previous_errors[i];
 
-  //  PID制御計算
-  outputPID[index] = (kp[index] * errors[index] + ki[index] * integral[index] + kd[index] * de[index]) * direction[index];
+    //  PID制御計算
+    outputPID[i] = (kp[i] * errors[i] + ki[i] * integral[i] + kd[i] * de[i]) * direction[i];
 
-  //  VEAB1とVEAB2に与えるPWMの値を計算し格納
-  Result veab = calculate_veab_Values(outputPID[index], index);
-  PID_PWM[2*index] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
-  PID_PWM[2*index+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
+    //  VEAB1とVEAB2に与えるPWMの値を計算し格納
+    Result veab = calculate_veab_Values(outputPID[i], i);
+    VEAB_desired[2*i] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
+    VEAB_desired[2*i+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
 
-  //  計算に用いた誤差を前回の誤差に変更
-  previous_errors[index] = errors[index];
+    //  計算に用いた誤差を前回の誤差に変更
+    previous_errors[i] = errors[i];
 
+  }
 }
 
 //  VEAB1とVEAB2に与えるPWMの値の計算関数(Ballistic Modeにおける両ポートの値を基準に足し引きを行う)
 Result calculate_veab_Values(float outputPID, int i) {
   Result result;
   if(i == 0){
-    result.veab_value1 = 132 + (outputPID / 2.0);  
-    result.veab_value2 = 124 - (outputPID / 2.0);
+    result.veab_value1 = 140 + (outputPID / 2.0);  
+    result.veab_value2 = 116 - (outputPID / 2.0);
   } else if(i == 1){
     result.veab_value1 = 128 + (outputPID / 2.0);  
     result.veab_value2 = 128 - (outputPID / 2.0);
   } else if(i == 2){
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 127 + (outputPID / 2.0);  
+    result.veab_value2 = 129 - (outputPID / 2.0);
   } else if(i == 3){
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 136 + (outputPID / 2.0);  
+    result.veab_value2 = 120 - (outputPID / 2.0);
   } else if(i == 4){
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 127 + (outputPID / 2.0);  
+    result.veab_value2 = 129 - (outputPID / 2.0);
   } else{
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 132 + (outputPID / 2.0);  
+    result.veab_value2 = 124 - (outputPID / 2.0);
   }
 
   result.veab_value1 = max(0, min(255, int(result.veab_value1)));
@@ -524,42 +451,6 @@ float calculateDerivative(CircularBuffer<int, 5> &buffer) {
 
   //  4階の後退差分で微分値を計算
   return (25 * f0 - 48 * f1 + 36 * f2 - 16 * f3 + 3 * f4) / (12 * h);
-}
-
-//  Ballistic Modeチェック関数
-int check_function(int index){
-  //  目標値までの距離
-  change[index] = abs(POT_desired[index] - POT_realized[index]);
-
-  //  角速度
-  speed[index] = abs(derivatives[index]);
-
-  //  目標値が変化すればチェック値を初期化
-  if(abs(POT_desired[index] - POT_desired_previous[index]) > 0){
-    Ballistic_check[index] = 0;
-  }
-
-  //  現在の目標値を前回分の目標値に格納
-  POT_desired_previous[index] = POT_desired[index];
-
-  //  Ballistic Modeにおける判定
-  if(Ballistic_check[index] == 1){
-
-    //  stop条件（Ballisti Mode → PID）の判定
-    if( (change[index] <= change_range_stop[index]) && (speed[index] <= speed_range_stop[index]) ){
-      return 0;
-    }
-
-    return 1;
-  }
-
-  //  PID制御における判定
-  //  start条件（PID → Ballistic Mode）の判定
-  if( (change[index] <= change_range_start[index]) && (speed[index] >= speed_range_start[index]) ){
-    return 1;
-  }
-
-  return 0;
 }
 
 //  ローパスフィルタ(RCフィルタ)関数※int型
@@ -742,23 +633,23 @@ void setup() {
   //======setup関数内での実行処理==============================
   //  VEABの初期化
   /*ピン0,1*/
-  analogWrite(aout_channels[0], 132);
-  analogWrite(aout_channels[1], 124);
+  analogWrite(aout_channels[0], 140);
+  analogWrite(aout_channels[1], 116);
   /*ピン2,3*/
-  analogWrite(aout_channels[2], 255);
-  analogWrite(aout_channels[3], 255);
+  analogWrite(aout_channels[2], 128);
+  analogWrite(aout_channels[3], 128);
   /*ピン4,5*/
-  analogWrite(aout_channels[4], 255);
-  analogWrite(aout_channels[5], 255);
+  analogWrite(aout_channels[4], 127);
+  analogWrite(aout_channels[5], 129);
   /*ピン6,7*/
-  analogWrite(aout_channels[6], 255);
-  analogWrite(aout_channels[7], 255);
+  analogWrite(aout_channels[6], 136);
+  analogWrite(aout_channels[7], 120);
   /*ピン8,9*/
-  analogWrite(aout_channels[8], 255);
-  analogWrite(aout_channels[9], 255);
+  analogWrite(aout_channels[8], 127);
+  analogWrite(aout_channels[9], 129);
   /*ピン28,29*/
-  analogWrite(aout_channels[10], 255);
-  analogWrite(aout_channels[11], 255);
+  analogWrite(aout_channels[10], 132);
+  analogWrite(aout_channels[11], 124);
 
   //  移動平均法1回目の処理(ポテンショメータ)
   for (int i = 0; i < LPF_KOSUU; i++){

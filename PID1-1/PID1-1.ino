@@ -191,7 +191,7 @@ std::queue<int> q4;
 std::queue<int> q5;
 
 //移動平均法での合計値と平均値格納
-int pot_sum[6] = {0};
+long pot_sum[6] = {0};
 int POT[6] = {0};
 
 /*------シリアル通信(ダウンサンプリング)-----------------------------------------------------------------------------------------*/
@@ -242,69 +242,65 @@ void setup() {
   analogWrite(PWM6_28, 255);
   analogWrite(PWM6_29, 255);
 
-  //POT値をシリアルモニタに表示(初回)および誤差(前回分)の初期化
-  while(digitalRead(Switch) == 1){
+  //移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
+  Result_LPF pot = Moving_LPF();
+  POT_realized[0] = pot.POT0;
+  POT_realized[1] = pot.POT1;
+  POT_realized[2] = pot.POT2;
+  POT_realized[3] = pot.POT3;
+  POT_realized[4] = pot.POT4;
+  POT_realized[5] = pot.POT5;
 
-    //移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
-    Result_LPF pot = Moving_LPF();
-    POT_realized[0] = pot.POT0;
-    POT_realized[1] = pot.POT1;
-    POT_realized[2] = pot.POT2;
-    POT_realized[3] = pot.POT3;
-    POT_realized[4] = pot.POT4;
-    POT_realized[5] = pot.POT5;
+  //シリアルモニタに表示(100Hz)
+  if(serial_count > serial_time){
+    //POT
+    /*Serial.print("POT1:");
+    Serial.print(POT_realized[0]);
+    Serial.print(",");
+    Serial.println(10);*/
 
-    //シリアルモニタに表示(100Hz)
-    if(serial_count > serial_time){
-      //POT
-      /*Serial.print("POT1:");
-      Serial.print(POT_realized[0]);
-      Serial.print(",");
-      Serial.println(10);*/
+    /*Serial.print("\t POT2:");
+    Serial.print(",");
+    Serial.print(POT_realized[1]);
+    Serial.print(",");
+    Serial.println(10);*/
 
-      /*Serial.print("\t POT2:");
-      Serial.print(",");
-      Serial.print(POT_realized[1]);
-      Serial.print(",");
-      Serial.println(10);*/
+    /*Serial.print("\t POT3:");
+    Serial.print(",");
+    Serial.print(POT_realized[2]);
+    Serial.print(",");
+    Serial.println(10);*/
 
-      /*Serial.print("\t POT3:");
-      Serial.print(",");
-      Serial.print(POT_realized[2]);
-      Serial.print(",");
-      Serial.println(10);*/
+    /*Serial.print("\t POT4:");
+    Serial.print(",");
+    Serial.print(POT_realized[3]);
+    Serial.print(",");
+    Serial.println(10);*/
 
-      /*Serial.print("\t POT4:");
-      Serial.print(",");
-      Serial.print(POT_realized[3]);
-      Serial.print(",");
-      Serial.println(10);*/
+    /*Serial.print("\t POT5:");
+    Serial.print(",");
+    Serial.print(POT_realized[4]);
+    Serial.print(",");
+    Serial.println(10);*/
 
-      /*Serial.print("\t POT5:");
-      Serial.print(",");
-      Serial.print(POT_realized[4]);
-      Serial.print(",");
-      Serial.println(10);*/
+    /*Serial.print("\t POT6:");
+    Serial.print(",");
+    Serial.print(POT_realized[5]);
+    Serial.print(",");
+    Serial.println(10);*/
 
-      /*Serial.print("\t POT6:");
-      Serial.print(",");
-      Serial.print(POT_realized[5]);
-      Serial.print(",");
-      Serial.println(10);*/
-
-      //ループ回数の初期化
-      serial_count = 0;
-    }
-
-    //誤差(前回分)の初期化
-    for(int i = 0; i < 6; i++){
-      previous_errors[i] = POT_desired[i] - POT_realized[i];
-    }
-
-    //ループの回数足し算
-    serial_count += 1;
-
+    //ループ回数の初期化
+    serial_count = 0;
   }
+
+  //誤差(前回分)の初期化
+  for(int i = 0; i < 6; i++){
+    previous_errors[i] = POT_desired[i] - POT_realized[i];
+  }
+
+  //ループの回数足し算
+  serial_count += 1;
+
 
   // 緊急ボタンの処理
   attachInterrupt(digitalPinToInterrupt(Switch_emergency), Emergency_function, FALLING);
@@ -314,9 +310,9 @@ void setup() {
 
 /*------ループ処理----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 void loop() {
-  /*
-  unsigned long ts, te;
-  ts = micros();*/
+  
+  unsigned long Ts, Te;
+  Ts = micros();/**/
 
   /*------PID制御-----------------------------------------------------------------------------------------*/
   //移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
@@ -514,10 +510,10 @@ void loop() {
 
   }
 
-  /*
-  te = micros();
+  
+  Te = micros();
   Serial.print("\t Time:");
-  Serial.println(te - ts); // μs*/
+  Serial.println(Te - Ts); // μs/**/
 
   //ループの回数足し算
   serial_count += 1;
@@ -601,11 +597,15 @@ int RC_LPF(int value, int previous_value, int initial_lpf, float coef_lpf){
 Result_LPF Moving_LPF() {
   Result_LPF lpf;
 
+  unsigned long ts, te;
+
   //読み込んだ値potとキューの先頭の値pot_last初期化
   int pot[6] = {0};
   int pot_last[6] = {0};
 
   if(LPF_count == 0){
+    ts = micros();
+
     for(int i = 0; i < LPF_kosuu; i++){
       //1自由度
       pot[0] = analogRead(POT1_A12); // アナログ値を1回だけ読み取る
@@ -647,7 +647,11 @@ Result_LPF Moving_LPF() {
     POT[4] = pot_sum[4] / LPF_kosuu;
     POT[5] = pot_sum[5] / LPF_kosuu;
 
+    Serial.print("\t Time1:");
+
   }else{
+    ts = micros();
+
     //1自由度
     pot_last[0] = q0.front();        // 最初の値を取得
     q0.pop();                        // 最初の値を削除
@@ -702,6 +706,8 @@ Result_LPF Moving_LPF() {
     pot_sum[5] += pot[5];            // 合計に加算
     POT[5] = pot_sum[5] / LPF_kosuu; // 新しい平均値を計算
 
+    Serial.print("\t Time2:");
+
   }
 
   lpf.POT0 = POT[0];
@@ -712,6 +718,9 @@ Result_LPF Moving_LPF() {
   lpf.POT5 = POT[5];
 
   LPF_count = 1;
+
+  te = micros();
+  Serial.print(te - ts); // μs
 
   return lpf;
 }

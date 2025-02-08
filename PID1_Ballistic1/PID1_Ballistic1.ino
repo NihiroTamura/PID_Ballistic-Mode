@@ -73,15 +73,15 @@ int POT_realized[6] = {
   0, 0, 0, 0, 0, 0
 };
 
-/*VEABの値を初期化
+/*VEABの値を初期化*/
 int VEAB_realized[12] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};*/
+};
 
 /*---PID制御用-----------------------------------------------------------------------------------------*/
 //PIDゲイン
 const float kp[6] = {
-  0.83, 2.1, 0.85, 0.2, 1.6, 0.6
+  0.7, 2.1, 0.85, 0.2, 1.6, 0.6
 };
 const float ki[6] = {
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0
@@ -92,7 +92,7 @@ const float kd[6] = {
 
 //目標値の設定
 int POT_desired[6] = {
-  260, 548, 113, 220, 130, 500
+  300, 548, 113, 220, 130, 500
 };//{腕の閉223-482開, 腕の下344-619上, 上腕の旋回内95-605外, 肘の伸144-740曲, 前腕の旋回内111-962外, 小指側縮62-895伸}
 
 //各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
@@ -141,17 +141,17 @@ const int Ballistic_PWM[12] = {
 //パラメータ
 //目標値にどれだけ近づいたかのスタートの閾値
 int change_range_start[6] = {
-  250, 100, 90, 90, 90, 90
+  150, 100, 90, 90, 90, 90
 };
 
 //目標値にどれだけ近づいたかのストップの閾値
 int change_range_stop[6] = {
-  250, 100, 90, 90, 90, 90
+  50, 100, 90, 90, 90, 90
 };
 
 //実現値の変化率のスタートの閾値
 int speed_range_start[6] = {
-  4, 6, 20, 20, 20, 20
+  2, 6, 20, 20, 20, 20
 };
 
 //実現値の変化率のストップの閾値
@@ -308,6 +308,10 @@ void setup() {
     POT_realized[4] = pot.POT4;
     POT_realized[5] = pot.POT5;
 
+    Serial.print(POT_realized[0]);
+    Serial.print(",");
+    Serial.println(abs(POT_realized[0]-POT_realized_previous[0]));
+
     //シリアルモニタに表示(100Hz)
     if(serial_count > serial_time){
       //POT
@@ -391,7 +395,7 @@ void setup() {
 /*------ループ処理----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 void loop() {
 
-  /*------PID制御-----------------------------------------------------------------------------------------*/
+  /*------PID制御&Ballistic Mode-----------------------------------------------------------------------------------------*/
   //移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
   Result_LPF pot = Moving_LPF();
   POT_realized[0] = pot.POT0;
@@ -400,6 +404,10 @@ void loop() {
   POT_realized[3] = pot.POT3;
   POT_realized[4] = pot.POT4;
   POT_realized[5] = pot.POT5;
+
+  Serial.print(POT_realized[0]);
+  Serial.print(",");
+  Serial.println(abs(POT_realized[0]-POT_realized_previous[0]));
 
   //RCローパスフィルタ適用(POT肘のみ)
   /*for(int i = 3; i < 4; i++){
@@ -841,31 +849,28 @@ int check_function(int index){
   POT_realized_previous[index] = POT_realized[index];
   POT_desired_previous[index] = POT_desired[index];
 
-
   //Ballistic Modeにおける判定
-  if(Ballistic_count[index] > 0){
+  if(Ballistic_count[index] == 1){
 
     //stop条件を満たしているか判定
-    if((change[index] <= change_range_stop[index]) && (speed[index] <= speed_range_start[index]) ){
+    /*if((change[index] <= change_range_stop[index]) && (speed[index] <= speed_range_stop[index]) ){
       Ballistic_count[index] = 0;
+
       return 0;
 
-    }
+    }*/
 
     return 1;
   }
 
   //PID制御における判定
-  if(Ballistic_count[index] == 0){
+  //start条件を満たしているか判定
+  if((change[index] <= change_range_start[index]) && (speed[index] >= speed_range_start[index]) ){
+    Ballistic_count[index] = 1;
 
-    //start条件を満たしているか判定
-    if((change[index] <= change_range_start[index]) && (speed[index] >= speed_range_start[index]) ){
-      Ballistic_count[index] = 1;
-      return 1;
-
-    }
-    
-    return 0;
+    return 1;
   }
+  
+  return 0;
 
 }

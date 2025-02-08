@@ -8,7 +8,7 @@
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board/sub"
-#define PUB_TOPICNAME "/board2/pub"
+#define PUB_TOPICNAME "/board1/pub"
 
 //------LEDの定義ピン--------------------------------------------------------------------
 #define LED 13
@@ -17,7 +17,7 @@
 #define POT_DESIRED 6
 
 //------パラメータの個数--------------------------------------------------------------------
-#define PARAMETER 0
+#define PARAMETER 28
 
 //------微分値の個数--------------------------------------------------------------------
 #define OMEGA 6
@@ -26,7 +26,7 @@
 #define BALLISTIC 6
 
 //------Publishするデータの個数--------------------------------------------------------------------
-#define PUBLISH 6 + 6 + OMEGA //  ANALOG_IN_CH + BALLISTIC + OMEGA
+#define PUBLISH 6 + 6 + 4 + OMEGA //  ANALOG_IN_CH + BALLISTIC + OMEGA
 
 //------Subscribeするデータの個数--------------------------------------------------------------------
 #define SUBSCRIBE 6 + 1 + PARAMETER //  POT_DESIRED + 7自由度目の目標値 + PARAMETER
@@ -104,9 +104,9 @@ volatile uint16_t pub[PUBLISH];
 //  POT値
 volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
-//  目標値の初期値{親指側縮1-649伸, - , -, - , - , -}
+//  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  600, 0, 0, 0, 0, 0
+  250, 290, 90, 240, 900, 500
 };
 
 //  parameter値
@@ -115,17 +115,17 @@ volatile uint16_t POT_desired[6] = {
 //---PID制御--------------------------------------------------------------------
 //  PIDゲイン
 const float kp[6] = {
-  0.6, 0.0, 0.0, 0.0, 0.0, 0.0
+  1.0, 3.0, 1.6, 1.2, 2.3, 0.5
 };
 const float ki[6] = {
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  1.0, 0.0, 0.0, 0.0, 0.0, 0.0
+  10.0, 10.0, 10.0, 10.0, 10.0, 1.0
 };
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
-const int direction[6] = {-1, 0, 0, 0, 0, 0};
+const int direction[6] = {-1, -1, 1, -1, -1, -1};
 
 //  各要素(自由度)の誤差
 int errors[6] = {0, 0, 0, 0, 0, 0};
@@ -161,7 +161,7 @@ int Ballistic_check[6] = {0, 0, 0, 0, 0, 0};
 
 //  Ballistic Mode PWM値
 const int Ballistic_PWM[12] = {
-  132, 124, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+  140, 116, 128, 128, 127, 129, 136, 120, 127, 129, 132, 124
 };
 
 //  1つ前の目標値
@@ -176,22 +176,22 @@ int speed[6] = {0, 0, 0, 0, 0, 0};
 
 //  change start value：目標値にどれだけ近づいたかのスタートの閾値
 int change_range_start[6] = {
-  150, 0, 0, 0, 0, 0
+  140, 150, 150, 150, 150, 150
 };
 
 //  change stop value：目標値にどれだけ近づいたかのストップの閾値
 int change_range_stop[6] = {
-  50, 0, 0, 0, 0, 0
+  100, 50, 50, 50, 50, 50
 };
 
 //  speed start value：角速度のスタートの閾値
 int speed_range_start[6] = {
-  6000, 0, 0, 0, 0, 0
+  1500, 3000, 4000, 4000, 6000, 3000
 };
 
 //  speed stop value：角速度のストップの閾値
 int speed_range_stop[6] = {
-  4000, 0, 0, 0, 0, 0
+  1000, 2000, 2500, 3000, 4000, 2500
 };
 
 //---ローパスフィルタ--------------------------------------------------------------------
@@ -336,14 +336,35 @@ void thread_callback() {
         pub[i+12] = Ballistic_check[i];
       }
 
-      //  subscribeしたメッセージを目標値に格納※board2のみsub[6]が目標値(Arm Robotの場合)
+      //  subscribeしたメッセージを目標値に格納
       for(int i = 0; i < POT_DESIRED; i++){
         if(sub_count == 0){
-          sub[6] = POT_desired[0];
+          sub[i] = POT_desired[i];
         }
 
-        POT_desired[0] = sub[6];
+        POT_desired[i] = sub[i];
       }
+
+      //  subscribeしたメッセージをBallistc Modeパラメータに格納
+      for(int i = 0; i < 6; i++){
+        if(sub_count == 0){
+          sub[4*i+7] = change_range_start[i];
+          sub[4*i+8] = change_range_stop[i];
+          sub[4*i+9] = speed_range_start[i];
+          sub[4*i+10] = speed_range_stop[i];
+        }
+
+        change_range_start[i] = sub[4*i+7];
+        change_range_stop[i] = sub[4*i+8];
+        speed_range_start[i] = sub[4*i+9];
+        speed_range_stop[i] = sub[4*i+10];
+
+      }
+
+      pub[18] = change_range_start[0];
+      pub[19] = change_range_stop[1];
+      pub[20] = speed_range_start[2];
+      pub[21] = speed_range_stop[3];
 
     }
 
@@ -386,9 +407,9 @@ void thread_callback() {
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1
+    /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);*/
+    analogWrite(aout_channels[1], VEAB_desired[1]);
     /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
     analogWrite(aout_channels[3], VEAB_desired[3]);*/
@@ -483,23 +504,23 @@ void PID(int index){
 Result calculate_veab_Values(float outputPID, int i) {
   Result result;
   if(i == 0){
-    result.veab_value1 = 132 + (outputPID / 2.0);  
-    result.veab_value2 = 124 - (outputPID / 2.0);
+    result.veab_value1 = 140 + (outputPID / 2.0);  
+    result.veab_value2 = 116 - (outputPID / 2.0);
   } else if(i == 1){
     result.veab_value1 = 128 + (outputPID / 2.0);  
     result.veab_value2 = 128 - (outputPID / 2.0);
   } else if(i == 2){
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 127 + (outputPID / 2.0);  
+    result.veab_value2 = 129 - (outputPID / 2.0);
   } else if(i == 3){
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 136 + (outputPID / 2.0);  
+    result.veab_value2 = 120 - (outputPID / 2.0);
   } else if(i == 4){
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 127 + (outputPID / 2.0);  
+    result.veab_value2 = 129 - (outputPID / 2.0);
   } else{
-    result.veab_value1 = 128 + (outputPID / 2.0);  
-    result.veab_value2 = 128 - (outputPID / 2.0);
+    result.veab_value1 = 132 + (outputPID / 2.0);  
+    result.veab_value2 = 124 - (outputPID / 2.0);
   }
 
   result.veab_value1 = max(0, min(255, int(result.veab_value1)));
@@ -742,23 +763,23 @@ void setup() {
   //======setup関数内での実行処理==============================
   //  VEABの初期化
   /*ピン0,1*/
-  analogWrite(aout_channels[0], 132);
-  analogWrite(aout_channels[1], 124);
+  analogWrite(aout_channels[0], 140);
+  analogWrite(aout_channels[1], 116);
   /*ピン2,3*/
-  analogWrite(aout_channels[2], 255);
-  analogWrite(aout_channels[3], 255);
+  analogWrite(aout_channels[2], 128);
+  analogWrite(aout_channels[3], 128);
   /*ピン4,5*/
-  analogWrite(aout_channels[4], 255);
-  analogWrite(aout_channels[5], 255);
+  analogWrite(aout_channels[4], 127);
+  analogWrite(aout_channels[5], 129);
   /*ピン6,7*/
-  analogWrite(aout_channels[6], 255);
-  analogWrite(aout_channels[7], 255);
+  analogWrite(aout_channels[6], 136);
+  analogWrite(aout_channels[7], 120);
   /*ピン8,9*/
-  analogWrite(aout_channels[8], 255);
-  analogWrite(aout_channels[9], 255);
+  analogWrite(aout_channels[8], 127);
+  analogWrite(aout_channels[9], 129);
   /*ピン28,29*/
-  analogWrite(aout_channels[10], 255);
-  analogWrite(aout_channels[11], 255);
+  analogWrite(aout_channels[10], 132);
+  analogWrite(aout_channels[11], 124);
 
   //  移動平均法1回目の処理(ポテンショメータ)
   for (int i = 0; i < LPF_KOSUU; i++){

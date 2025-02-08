@@ -176,22 +176,22 @@ int speed[6] = {0, 0, 0, 0, 0, 0};
 
 //  change start value：目標値にどれだけ近づいたかのスタートの閾値
 int change_range_start[6] = {
-  150, 0, 0, 0, 0, 0
+  258, 0, 0, 0, 0, 0
 };
 
 //  change stop value：目標値にどれだけ近づいたかのストップの閾値
 int change_range_stop[6] = {
-  50, 0, 0, 0, 0, 0
+  238, 0, 0, 0, 0, 0
 };
 
 //  speed start value：角速度のスタートの閾値
 int speed_range_start[6] = {
-  6000, 0, 0, 0, 0, 0
+  44973, 0, 0, 0, 0, 0
 };
 
 //  speed stop value：角速度のストップの閾値
 int speed_range_stop[6] = {
-  4000, 0, 0, 0, 0, 0
+  6451, 0, 0, 0, 0, 0
 };
 
 //---ローパスフィルタ--------------------------------------------------------------------
@@ -386,9 +386,9 @@ void thread_callback() {
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1
+    /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);*/
+    analogWrite(aout_channels[1], VEAB_desired[1]);
     /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
     analogWrite(aout_channels[3], VEAB_desired[3]);*/

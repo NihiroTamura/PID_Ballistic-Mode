@@ -96,7 +96,7 @@ const float kd[6] = {
 
 //目標値の設定
 int POT_desired[6] = {
-  450, 500, 113, 204, 930, 540
+  450, 500, 113, 160, 930, 540
 };//{腕の閉223-482開, 腕の下344-619上, 上腕の旋回内95-605外, 肘の伸144-740曲, 前腕の旋回内111-962外, 小指側縮62-895伸}
 
 //各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
@@ -196,7 +196,7 @@ void setup() {
   //VEABの初期化
   /*ピン0,1*/
   analogWrite(PWM1_0, 255);
-  analogWrite(PWM1_1, 128);
+  analogWrite(PWM1_1, 255);
   /*ピン2,3*/
   analogWrite(PWM2_2, 255);
   analogWrite(PWM2_3, 255);
@@ -241,13 +241,16 @@ void setup() {
     POT_realized[5] = POT_realized[5] /100;
 
     //シリアルモニタに表示
-    //POT
-    /*Serial.print("POT1:");*/
+    //POT/**/
+    Serial.print("POT1:");
     Serial.print(POT_realized[0]);
-    Serial.print(",");
-    Serial.println(10);
-    /*Serial.print("\t POT2:");
+    //Serial.print(",");
+    //Serial.print(10);
+    //Serial.print(",");
+    Serial.print("\t POT2:");
     Serial.print(POT_realized[1]);
+    //Serial.print(",");
+    //Serial.println(10);
     Serial.print("\t POT3:");
     Serial.print(POT_realized[2]);
     Serial.print("\t POT4:");
@@ -255,7 +258,7 @@ void setup() {
     Serial.print("\t POT5:");
     Serial.print(POT_realized[4]);
     Serial.print("\t POT6:");
-    Serial.println(POT_realized[5]);*/
+    Serial.println(POT_realized[5]);/**/
 
     //誤差(前回分)の初期化
     for(int i = 0; i < 6; i++){
@@ -272,6 +275,9 @@ void setup() {
 
 /*------ループ処理----------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 void loop() {
+  /**/
+  unsigned long ts, te;
+  ts = micros();
 
   /*------PID制御-----------------------------------------------------------------------------------------*/
   //POT値をPOT_realizedに格納
@@ -404,22 +410,30 @@ void loop() {
 
   /*------シリアルモニタに表示-----------------------------------------------------------------------------------------*/
   /*POT*/
-  /*Serial.print("POT1:");*/
+  /*Serial.print("POT1:");
   Serial.print(POT_realized[0]);
   Serial.print(",");
-  Serial.println(11);
-  /*Serial.print("\t POT2:");
-  Serial.print(POT_realized[1]);
-  Serial.print("\t POT3:");
+  Serial.print(11);
+  Serial.print(",");*/
+  //Serial.print("\t POT2:");
+  //Serial.print(POT_realized[1]);
+  //Serial.print(",");
+  //Serial.println(11);
+  /*Serial.print("\t POT3:");
   Serial.print(POT_realized[2]);
   Serial.print(",");
-  Serial.print("\t POT4:");
-  Serial.print(POT_realized[3]);
-  Serial.print("\t POT5:");
-  Serial.print(POT_realized[4]);
-  Serial.print(",");
-  Serial.print("\t POT6:");
-  Serial.println(POT_realized[5]);*/
+  Serial.print("\t POT4:");*/
+  //Serial.println(POT_realized[3]);
+  //Serial.print("\t POT5:");
+  //Serial.print(POT_realized[4]);
+  //Serial.print(",");
+  //Serial.print("\t POT6:");
+  //Serial.println(POT_realized[5]);
+
+  /**/
+  te = micros();
+  Serial.print("\t Time:");
+  Serial.println(te - ts); // ns
 
   /*VEAB
   Serial.print("\t VEAB1_0:");

@@ -247,7 +247,7 @@ void setup() {
   //VEABの初期化
   /*ピン0,1*/
   analogWrite(PWM1_0, 255);
-  analogWrite(PWM1_1, 128);
+  analogWrite(PWM1_1, 255);
   /*ピン2,3*/
   analogWrite(PWM2_2, 255);
   analogWrite(PWM2_3, 255);
@@ -293,20 +293,20 @@ void setup() {
 
     //シリアルモニタに表示
     //POT
-    /*//Serial.print("POT1:");*/
+    /*//Serial.print("POT1:");
     Serial.print(POT_realized[0]);
     Serial.print(",");
     Serial.print(10);
     Serial.print(",");
     Serial.println(Ballistic_check[0]);
-    //Serial.print(",");
-    /*//Serial.print("\t POT2:");
+    Serial.print(",");
+    Serial.print("\t POT2:");*/
     Serial.print(POT_realized[1]);
     Serial.print(",");
     Serial.print(10);
     Serial.print(",");
-    Serial.println(Ballistic_check[1]);*/
-    /*Serial.print("\t POT3:");
+    Serial.println(Ballistic_check[1]);
+    /*/*Serial.print("\t POT3:");
     Serial.print(POT_realized[2]);
     Serial.print("\t POT4:");
     Serial.print(POT_realized[3]);
@@ -454,9 +454,9 @@ void loop() {
   /*ピン0,1*/
   analogWrite(PWM1_0, VEAB_desired[0]);
   analogWrite(PWM1_1, VEAB_desired[1]);
-  /*ピン2,3
+  /*ピン2,3*/
   analogWrite(PWM2_2, VEAB_desired[2]);
-  analogWrite(PWM2_3, VEAB_desired[3]);*/
+  analogWrite(PWM2_3, VEAB_desired[3]);
   /*ピン4,5
   analogWrite(PWM3_4, VEAB_desired[4]);
   analogWrite(PWM3_5, VEAB_desired[5]);*/
@@ -493,19 +493,19 @@ void loop() {
 
   /*------シリアルモニタに表示-----------------------------------------------------------------------------------------*/
   /*POT*/
-  /*//Serial.print("POT1:");*/
+  /*//Serial.print("POT1:");
   Serial.print(POT_realized[0]);
   Serial.print(",");
   Serial.print(11);
   Serial.print(",");
   Serial.println(Ballistic_check[0]);
-  //Serial.print(",");
-  /*//Serial.print("\t POT2:");
+  Serial.print(",");
+  Serial.print("\t POT2:");*/
   Serial.print(POT_realized[1]);
   Serial.print(",");
   Serial.print(11);
   Serial.print(",");
-  Serial.println(Ballistic_check[1]);*/
+  Serial.println(Ballistic_check[1]);
   /*Serial.print("\t POT3:");
   Serial.print(POT_realized[2]);
   Serial.print("\t POT4:");

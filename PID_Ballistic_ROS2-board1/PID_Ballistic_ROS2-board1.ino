@@ -386,9 +386,9 @@ void thread_callback() {
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1
+    /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);*/
+    analogWrite(aout_channels[1], VEAB_desired[1]);
     /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
     analogWrite(aout_channels[3], VEAB_desired[3]);*/

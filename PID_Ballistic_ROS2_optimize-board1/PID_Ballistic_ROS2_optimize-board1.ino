@@ -315,11 +315,6 @@ void thread_callback() {
         
       }
 
-      //  PID制御 or Ballistic Mode判定
-      for(int i = 0; i < BALLISTIC; i++){
-        Ballistic_check[i] = check_function(i);
-      }
-
       //---ROS2メッセージに格納--------------------------------------------------------------------
       //  publishメッセージの配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
@@ -329,11 +324,6 @@ void thread_callback() {
       //  publishメッセージの配列に微分値(絶対値)を格納
       for (int i = 0; i < OMEGA; i++){
         pub[i+6] = abs(derivatives[i]);
-      }
-
-      //  publishメッセージの配列にBallistic Mode判定値を格納
-      for(int i = 0; i < BALLISTIC; i++){
-        pub[i+12] = Ballistic_check[i];
       }
 
       //  subscribeしたメッセージを目標値に格納
@@ -359,6 +349,16 @@ void thread_callback() {
         speed_range_start[i] = sub[4*i+9];
         speed_range_stop[i] = sub[4*i+10];
 
+      }
+
+      //  PID制御 or Ballistic Mode判定
+      for(int i = 0; i < BALLISTIC; i++){
+        Ballistic_check[i] = check_function(i);
+      }
+
+      //  publishメッセージの配列にBallistic Mode判定値を格納
+      for(int i = 0; i < BALLISTIC; i++){
+        pub[i+12] = Ballistic_check[i];
       }
 
     }
@@ -402,24 +402,24 @@ void thread_callback() {
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1
+    /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);*/
-    /*ピン2,3
+    analogWrite(aout_channels[1], VEAB_desired[1]);
+    /*ピン2,3*/
     analogWrite(aout_channels[2], VEAB_desired[2]);
-    analogWrite(aout_channels[3], VEAB_desired[3]);*/
-    /*ピン4,5
+    analogWrite(aout_channels[3], VEAB_desired[3]);
+    /*ピン4,5*/
     analogWrite(aout_channels[4], VEAB_desired[4]);
-    analogWrite(aout_channels[5], VEAB_desired[5]);*/
-    /*ピン6,7
+    analogWrite(aout_channels[5], VEAB_desired[5]);
+    /*ピン6,7*/
     analogWrite(aout_channels[6], VEAB_desired[6]);
-    analogWrite(aout_channels[7], VEAB_desired[7]);*/
-    /*ピン8,9
+    analogWrite(aout_channels[7], VEAB_desired[7]);
+    /*ピン8,9*/
     analogWrite(aout_channels[8], VEAB_desired[8]);
-    analogWrite(aout_channels[9], VEAB_desired[9]);*/
-    /*ピン28,29
+    analogWrite(aout_channels[9], VEAB_desired[9]);
+    /*ピン28,29*/
     analogWrite(aout_channels[10], VEAB_desired[10]);
-    analogWrite(aout_channels[11], VEAB_desired[11]);*/
+    analogWrite(aout_channels[11], VEAB_desired[11]);
 
     //====================================
     // to here
@@ -572,6 +572,11 @@ int check_function(int index){
   //  PID制御における判定
   //  start条件（PID → Ballistic Mode）の判定
   if( (change[index] <= change_range_start[index]) && (speed[index] >= speed_range_start[index]) ){
+    //  PID → Ballistic Mode条件とBallisti Mode → PID条件を両方満たすならPID制御を優先
+    if( (change[index] <= change_range_stop[index]) && (speed[index] <= speed_range_stop[index])){
+      return 0;
+    }
+    
     return 1;
   }
 
@@ -800,7 +805,7 @@ void setup() {
   delay(5000);
   //==========================================================
 
-  // turn off LED
+  //  turn off LED
   digitalWrite(LED, LOW);
 
   //------run the control thread（新しいスレッドの作成。thread_cakkback関数が繰り返される）--------------------------------------------------------------------

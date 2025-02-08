@@ -103,7 +103,7 @@ volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{親指側縮1-649伸, - , -, - , - , -}
 volatile uint16_t POT_desired[6] = {
-  200, 0, 0, 0, 0, 0
+  250, 0, 0, 0, 0, 0
 };
 
 //  parameter値

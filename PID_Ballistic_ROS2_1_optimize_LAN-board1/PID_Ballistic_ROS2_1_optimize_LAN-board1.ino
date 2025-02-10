@@ -734,7 +734,7 @@ void setup() {
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
 
   //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
-  Serial.begin(9600);
+  //Serial.begin(9600);
 
   //  configure LED pin
   pinMode(LED, OUTPUT);

@@ -108,21 +108,22 @@ volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  400, 290, 90, 240, 900, 500
+  270, 290, 90, 240, 900, 500
 };
 
 //---ADRC--------------------------------------------------------------------
 //  PDゲイン
 const float kp[6] = {
-  80.0, 3.0, 1.6, 1.2, 2.3, 0.5
+  5.0, 3.0, 1.6, 1.2, 2.3, 0.5
 };
 const float kd[6] = {
-  10.0, 10.0, 10.0, 10.0, 10.0, 1.0
+  0.0, 10.0, 10.0, 10.0, 10.0, 1.0
 };
 
 //  オブザーバゲイン
 //  オブザーバーの極(-λ₀の重根)
-float lamda_0[6] = {50.0, 10.0, 10.0, 10.0, 10.0, 10.0};
+float lamda_0[6] = {100.0, 10.0, 10.0, 10.0, 10.0, 10.0};
+
 //  ゲイン
 const float beta1[6] = {
   3 * lamda_0[0], 3 * lamda_0[1], 3 * lamda_0[2], 3 * lamda_0[3], 3 * lamda_0[4], 3 * lamda_0[5]
@@ -147,7 +148,7 @@ float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  制御入力の係数
-float input_coef[6] = {1000.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+float input_coef[6] = {5000.0, 1.0, 1.0, 1.0, 1.0, 1.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
@@ -454,10 +455,13 @@ void ADRC(int index){
   errors[index] = POT_desired[index] - z1[index];
 
   //  ADRC計算
-  outputADRC[index] = ((-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index]) * direction[index];
+  outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
+
+  //  アンドロイドのアクチュエータの要件（ポテンショメータの正方向と入力の正方向を一致させる）
+  outputADRC_direct[index] = outputADRC[index] * direction[index];
 
   //  VEAB1とVEAB2に与えるPWMの値を計算し格納
-  Result veab = calculate_veab_Values(outputADRC[index], index);
+  Result veab = calculate_veab_Values(outputADRC_direct[index], index);
   ADRC_PWM[2*index] = veab.veab_value1;   //0, 2, 4, 6, 8, 10ピンへ
   ADRC_PWM[2*index+1] = veab.veab_value2; //1, 3, 5, 7, 9, 11ピンへ
 
@@ -467,8 +471,8 @@ void ADRC(int index){
 Result calculate_veab_Values(float outputADRC_derect, int i) {
   Result result;
   if(i == 0){
-    result.veab_value1 = 140 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 116 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 143 + (outputADRC_derect / 2.0);  
+    result.veab_value2 = 113 - (outputADRC_derect / 2.0);
   } else if(i == 1){
     result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
     result.veab_value2 = 128 - (outputADRC_derect / 2.0);
@@ -701,8 +705,8 @@ void setup() {
   //======setup関数内での実行処理==============================
   //  VEABの初期化
   /*ピン0,1*/
-  analogWrite(aout_channels[0], 140);
-  analogWrite(aout_channels[1], 116);
+  analogWrite(aout_channels[0], 143);
+  analogWrite(aout_channels[1], 113);
   /*ピン2,3*/
   analogWrite(aout_channels[2], 128);
   analogWrite(aout_channels[3], 128);
@@ -746,7 +750,7 @@ void setup() {
     T_stop = millis();
 
     if(T_stop - T_start >= 5000){
-      break;  //  10秒を超えたらループを抜ける
+      break;  //  5秒を超えたらループを抜ける
     }
 
     //  移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納

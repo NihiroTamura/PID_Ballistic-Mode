@@ -108,21 +108,21 @@ volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  270, 290, 90, 240, 900, 500
+  258, 290, 90, 240, 900, 500
 };
 
 //---ADRC--------------------------------------------------------------------
-//  PDゲイン
+//  PDゲイン500
 const float kp[6] = {
-  5.0, 3.0, 1.6, 1.2, 2.3, 0.5
+  1500.0, 3.0, 1.6, 1.2, 2.3, 0.5
 };
 const float kd[6] = {
-  0.0, 10.0, 10.0, 10.0, 10.0, 1.0
+  25.0, 10.0, 10.0, 10.0, 10.0, 1.0
 };
 
 //  オブザーバゲイン
 //  オブザーバーの極(-λ₀の重根)
-float lamda_0[6] = {100.0, 10.0, 10.0, 10.0, 10.0, 10.0};
+float lamda_0[6] = {300.0, 10.0, 10.0, 10.0, 10.0, 10.0};
 
 //  ゲイン
 const float beta1[6] = {
@@ -148,7 +148,7 @@ float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  制御入力の係数
-float input_coef[6] = {5000.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+float input_coef[6] = {10000.0, 1.0, 1.0, 1.0, 1.0, 1.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
@@ -168,6 +168,9 @@ int ADRC_PWM[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //  初回のESO用時間変数
 int T_start = 0;
 int T_stop = 0;
+
+//  初回のESO用
+int eso_count = 0;
 
 //---VEABへのPWM信号の出力--------------------------------------------------------------------
 //  VEABへのPWM出力値用構造体
@@ -360,25 +363,46 @@ void thread_callback() {
 
     }
 
+    Serial.print(POT_realized[0]);
+    Serial.print(",");
+    Serial.print(z1[0]);
+    Serial.print(",");
+    Serial.print(dz1[0]);
+    Serial.print(",");
+    Serial.print(derivatives[0]);
+    Serial.print(",");
+    Serial.print(z2[0]);
+    Serial.print(",");
+    Serial.print(dz2[0]);
+    Serial.print(",");
+    Serial.print(z3[0]);
+    Serial.print(",");
+    Serial.print(dz3[0]);
+    Serial.print(",");
+    Serial.print(outputADRC[0]);
+    Serial.print(",");
+    Serial.println(POT_desired[0]);
+
+
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
     analogWrite(aout_channels[1], VEAB_desired[1]);
-    /*ピン2,3*/
+    /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
-    analogWrite(aout_channels[3], VEAB_desired[3]);
-    /*ピン4,5*/
+    analogWrite(aout_channels[3], VEAB_desired[3]);*/
+    /*ピン4,5
     analogWrite(aout_channels[4], VEAB_desired[4]);
-    analogWrite(aout_channels[5], VEAB_desired[5]);
-    /*ピン6,7*/
+    analogWrite(aout_channels[5], VEAB_desired[5]);*/
+    /*ピン6,7
     analogWrite(aout_channels[6], VEAB_desired[6]);
-    analogWrite(aout_channels[7], VEAB_desired[7]);
-    /*ピン8,9*/
+    analogWrite(aout_channels[7], VEAB_desired[7]);*/
+    /*ピン8,9
     analogWrite(aout_channels[8], VEAB_desired[8]);
-    analogWrite(aout_channels[9], VEAB_desired[9]);
-    /*ピン28,29*/
+    analogWrite(aout_channels[9], VEAB_desired[9]);*/
+    /*ピン28,29
     analogWrite(aout_channels[10], VEAB_desired[10]);
-    analogWrite(aout_channels[11], VEAB_desired[11]);
+    analogWrite(aout_channels[11], VEAB_desired[11]);*/
 
     //====================================
     // to here
@@ -431,6 +455,16 @@ void subscription_callback(const void * msgin)
 
 //  ESO関数
 void ESO(int index){
+  //  1回目のみ実現値を推定値に格納
+  if(eso_count == 0){
+    for(int i = 0; i < 6; i++){
+      z1[i] = POT_realized[i];
+      z1_float[i] = (float)POT_realized[i];
+
+      eso_count = 1;
+    }
+  }
+
   //  角度の推定
   dz1[index] = z2[index] + beta1[index] * (POT_realized[index] - z1[index]);
   //  角速度の推定
@@ -723,6 +757,8 @@ void setup() {
   analogWrite(aout_channels[10], 132);
   analogWrite(aout_channels[11], 124);
 
+  delay(5000);
+
   //  移動平均法1回目の処理(ポテンショメータ)
   for (int i = 0; i < LPF_KOSUU; i++){
     Moving_LPF();
@@ -744,74 +780,6 @@ void setup() {
 
   }
 
-  //  拡張状態オブザーバの初期の推定状態を作成のため5秒待機(1kHzでサンプリング)
-  T_start = millis();
-  while(true){
-    T_stop = millis();
-
-    if(T_stop - T_start >= 5000){
-      break;  //  5秒を超えたらループを抜ける
-    }
-
-    //  移動平均法ローパスフィルタを適用したPOT値をPOT_realizedに格納
-    Result_LPF pot = Moving_LPF();
-    POT_realized[0] = pot.POT0;
-    POT_realized[1] = pot.POT1;
-    POT_realized[2] = pot.POT2;
-    POT_realized[3] = pot.POT3;
-    POT_realized[4] = pot.POT4;
-    POT_realized[5] = pot.POT5;
-
-    // 各ポテンショメータのデータをリングバッファ(角速度計算用)に追加
-    for (int i = 0; i < OMEGA; i++) {
-      omegaBuffers[i].unshift(POT_realized[i]);
-    }
-
-    // 各ポテンショメータの微分値を計算
-    for (int i = 0; i < OMEGA; i++) {
-      derivatives[i] = calculateDerivative(omegaBuffers[i]);
-    }
-
-    //  RCローパスフィルタ適用(角速度)
-    for(int i = 0; i < OMEGA; i++){
-
-      //  ローパスフィルタ関数呼び出し
-      omega_filter[i] = RC_LPF_float(derivatives[i], previous_value_omega[i], initial_lpf_omega[i], coef_lpf_omega);
-
-      initial_lpf_omega[i] = 1;
-
-      //  微分値に格納
-      derivatives[i] = omega_filter[i];
-
-      //  前回の微分値に格納
-      previous_value_omega[i] = omega_filter[i];
-      
-    }
-
-    //  拡張状態オブザーバの計算
-    for(int i = 0; i < 6; i++){
-      ESO(i);
-    }
-
-    //  ADRC PWM値計算
-    for(int i = 0; i < 6; i++){
-      ADRC(i);
-    }
-
-    int T1 = millis();
-
-    //  周期を満たすように調整
-    if( T1-T_stop <= CONTROL_PERIOD_MS ){
-      //  周期分待つ
-      delay(CONTROL_PERIOD_MS - (T1-T_stop));
-    } else {
-      //  the designated period is violated
-      error_loop();
-    }
-
-  }
-
-  delay(2000);
   //==========================================================
 
   //  turn off LED

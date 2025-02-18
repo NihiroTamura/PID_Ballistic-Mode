@@ -363,6 +363,7 @@ void thread_callback() {
 
     }
 
+    //  シリアルモニタに表示
     Serial.print(POT_realized[0]);
     Serial.print(",");
     Serial.print(z1[0]);

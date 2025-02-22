@@ -108,21 +108,29 @@ volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  258, 290, 90, 240, 900, 500
+  258, 300, 390, 220, 900, 500
 };
 
 //---ADRC--------------------------------------------------------------------
-//  PDゲイン500
+/*//  PDゲイン（単自由度）*/
 const float kp[6] = {
-  1500.0, 3.0, 1.6, 1.2, 2.3, 0.5
+  3000.0, 4000.0, 3200.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  25.0, 10.0, 10.0, 10.0, 10.0, 1.0
+  85.0, 180.0, 200.0, 0.0, 10.0, 0.0
 };
 
+/*  PDゲイン（複数自由度）
+const float kp[6] = {
+  1500.0, 8500.0, 4000.0, 800.0, 2600.0, 1200.0
+};
+const float kd[6] = {
+  150.0, 260.0, 700.0, 40.0, 270.0, 5.0
+};*/
+
 //  オブザーバゲイン
-//  オブザーバーの極(-λ₀の重根)
-float lamda_0[6] = {300.0, 10.0, 10.0, 10.0, 10.0, 10.0};
+//  オブザーバーの極(-λ₀の重根)600
+float lamda_0[6] = {300.0, 300.0, 300.0, 300.0, 300.0, 300.0};
 
 //  ゲイン
 const float beta1[6] = {
@@ -138,8 +146,7 @@ const float beta3[6] = {
 //  ESO(拡張状態オブザーバ)
 //  z1:角度の推定値
 float dz1[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-float z1_float[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-int z1[6] = {0, 0, 0, 0, 0, 0};
+float z1[6] = {0, 0, 0, 0, 0, 0};
 //  z2:角速度の推定値
 float dz2[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z2[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -147,14 +154,14 @@ float z2[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-//  制御入力の係数
-float input_coef[6] = {10000.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+//  制御入力の係数100000
+float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
 
 //  各要素(自由度)の誤差
-int errors[6] = {0, 0, 0, 0, 0, 0};
+float errors[6] = {0, 0, 0, 0, 0, 0};
 
 //  ADRC計算値
 float outputADRC[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -175,8 +182,8 @@ int eso_count = 0;
 //---VEABへのPWM信号の出力--------------------------------------------------------------------
 //  VEABへのPWM出力値用構造体
 struct Result {
-  int veab_value1;
-  int veab_value2;
+  float veab_value1;
+  float veab_value2;
 };
 
 //  VEABへのPWM出力値
@@ -186,7 +193,7 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //--RCフィルタ--------------------------------------------------------------------
 //  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
 //  カットオフ周波数:Hz, サンプリング周期:で設定
-const float coef_lpf_veab = 0.52;   //  VEAB(カットオフ周波数150Hz)
+const float coef_lpf_veab = 0;   //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
 
 //  ローパスフィルタの値保持変数
@@ -364,6 +371,7 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
+    /*
     Serial.print(POT_realized[0]);
     Serial.print(",");
     Serial.print(z1[0]);
@@ -382,22 +390,127 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[0]);
     Serial.print(",");
-    Serial.println(POT_desired[0]);
+    Serial.println(POT_desired[0]);*/
+    /*
+    Serial.print(",");
+    Serial.print(POT_realized[1]);
+    Serial.print(",");
+    Serial.print(z1[1]);
+    Serial.print(",");
+    Serial.print(dz1[1]);
+    Serial.print(",");
+    Serial.print(derivatives[1]);
+    Serial.print(",");
+    Serial.print(z2[1]);
+    Serial.print(",");
+    Serial.print(dz2[1]);
+    Serial.print(",");
+    Serial.print(z3[1]);
+    Serial.print(",");
+    Serial.print(dz3[1]);
+    Serial.print(",");
+    Serial.print(outputADRC[1]);
+    Serial.print(",");
+    Serial.println(POT_desired[1]);*/
+    /*
+    Serial.print(",");
+    Serial.print(POT_realized[2]);
+    Serial.print(",");
+    Serial.print(z1[2]);
+    Serial.print(",");
+    Serial.print(dz1[2]);
+    Serial.print(",");
+    Serial.print(derivatives[2]);
+    Serial.print(",");
+    Serial.print(z2[2]);
+    Serial.print(",");
+    Serial.print(dz2[2]);
+    Serial.print(",");
+    Serial.print(z3[2]);
+    Serial.print(",");
+    Serial.print(dz3[2]);
+    Serial.print(",");
+    Serial.print(outputADRC[2]);
+    Serial.print(",");
+    Serial.println(POT_desired[2]);*/
+    /*
+    Serial.print(",");*/
+    Serial.print(POT_realized[3]);
+    Serial.print(",");
+    Serial.print(z1[3]);
+    Serial.print(",");
+    Serial.print(dz1[3]);
+    Serial.print(",");
+    Serial.print(derivatives[3]);
+    Serial.print(",");
+    Serial.print(z2[3]);
+    Serial.print(",");
+    Serial.print(dz2[3]);
+    Serial.print(",");
+    Serial.print(z3[3]);
+    Serial.print(",");
+    Serial.print(dz3[3]);
+    Serial.print(",");
+    Serial.print(outputADRC[3]);
+    Serial.print(",");
+    Serial.println(POT_desired[3]);
+    /*
+    Serial.print(",");
+    Serial.print(POT_realized[4]);
+    Serial.print(",");
+    Serial.print(z1[4]);
+    Serial.print(",");
+    Serial.print(dz1[4]);
+    Serial.print(",");
+    Serial.print(derivatives[4]);
+    Serial.print(",");
+    Serial.print(z2[4]);
+    Serial.print(",");
+    Serial.print(dz2[4]);
+    Serial.print(",");
+    Serial.print(z3[4]);
+    Serial.print(",");
+    Serial.print(dz3[4]);
+    Serial.print(",");
+    Serial.print(outputADRC[4]);
+    Serial.print(",");
+    Serial.println(POT_desired[4]);*/
+    /*
+    Serial.print(",");
+    Serial.print(POT_realized[5]);
+    Serial.print(",");
+    Serial.print(z1[5]);
+    Serial.print(",");
+    Serial.print(dz1[5]);
+    Serial.print(",");
+    Serial.print(derivatives[5]);
+    Serial.print(",");
+    Serial.print(z2[5]);
+    Serial.print(",");
+    Serial.print(dz2[5]);
+    Serial.print(",");
+    Serial.print(z3[5]);
+    Serial.print(",");
+    Serial.print(dz3[5]);
+    Serial.print(",");
+    Serial.print(outputADRC[5]);
+    Serial.print(",");
+    Serial.println(POT_desired[5]);*/
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1*/
+    /*ピン0,1
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);
+    analogWrite(aout_channels[1], VEAB_desired[1]);*/
     /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
     analogWrite(aout_channels[3], VEAB_desired[3]);*/
     /*ピン4,5
     analogWrite(aout_channels[4], VEAB_desired[4]);
     analogWrite(aout_channels[5], VEAB_desired[5]);*/
-    /*ピン6,7
+    /*ピン6,7*/
     analogWrite(aout_channels[6], VEAB_desired[6]);
-    analogWrite(aout_channels[7], VEAB_desired[7]);*/
+    analogWrite(aout_channels[7], VEAB_desired[7]);
     /*ピン8,9
     analogWrite(aout_channels[8], VEAB_desired[8]);
     analogWrite(aout_channels[9], VEAB_desired[9]);*/
@@ -459,23 +572,21 @@ void ESO(int index){
   //  1回目のみ実現値を推定値に格納
   if(eso_count == 0){
     for(int i = 0; i < 6; i++){
-      z1[i] = POT_realized[i];
-      z1_float[i] = (float)POT_realized[i];
+      z1[i] = (float)POT_realized[i];
 
       eso_count = 1;
     }
   }
 
   //  角度の推定
-  dz1[index] = z2[index] + beta1[index] * (POT_realized[index] - z1[index]);
+  dz1[index] = z2[index] + beta1[index] * ((float)POT_realized[index] - z1[index]);
   //  角速度の推定
-  dz2[index] = z3[index] + beta2[index] * (POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
+  dz2[index] = z3[index] + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
   //  外乱（動特性）の推定
-  dz3[index] = beta3[index] * (POT_realized[index] - z1[index]);
+  dz3[index] = beta3[index] * ((float)POT_realized[index] - z1[index]);
 
   //  角度
-  z1_float[index] += dz1[index] * 0.001;
-  z1[index] = (int)z1_float[index]; //  int型にキャスト
+  z1[index] += dz1[index] * 0.001;
   //  角速度
   z2[index] += dz2[index] * 0.001;
   //　外乱
@@ -487,7 +598,7 @@ void ESO(int index){
 void ADRC(int index){
 
   //  誤差計算
-  errors[index] = POT_desired[index] - z1[index];
+  errors[index] = (float)POT_desired[index] - z1[index];
 
   //  ADRC計算
   outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
@@ -509,8 +620,8 @@ Result calculate_veab_Values(float outputADRC_derect, int i) {
     result.veab_value1 = 143 + (outputADRC_derect / 2.0);  
     result.veab_value2 = 113 - (outputADRC_derect / 2.0);
   } else if(i == 1){
-    result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 126 + (outputADRC_derect / 2.0);  
+    result.veab_value2 = 130 - (outputADRC_derect / 2.0);
   } else if(i == 2){
     result.veab_value1 = 127 + (outputADRC_derect / 2.0);  
     result.veab_value2 = 129 - (outputADRC_derect / 2.0);
@@ -627,7 +738,7 @@ void setup() {
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
 
   //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
-  //Serial.begin(9600);
+  Serial.begin(9600);
 
   //  configure LED pin
   pinMode(LED, OUTPUT);
@@ -743,8 +854,8 @@ void setup() {
   analogWrite(aout_channels[0], 143);
   analogWrite(aout_channels[1], 113);
   /*ピン2,3*/
-  analogWrite(aout_channels[2], 128);
-  analogWrite(aout_channels[3], 128);
+  analogWrite(aout_channels[2], 126);
+  analogWrite(aout_channels[3], 130);
   /*ピン4,5*/
   analogWrite(aout_channels[4], 127);
   analogWrite(aout_channels[5], 129);

@@ -108,16 +108,16 @@ volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
 volatile uint16_t POT_desired[6] = {
-  258, 300, 390, 220, 900, 500
+  258, 300, 390, 500, 600, 500
 };
 
 //---ADRC--------------------------------------------------------------------
 /*//  PDゲイン（単自由度）*/
 const float kp[6] = {
-  3000.0, 4000.0, 3200.0, 0.0, 0.0, 0.0
+  3000.0, 4000.0, 3200.0, 600.0, 2000.0, 900.0
 };
 const float kd[6] = {
-  85.0, 180.0, 200.0, 0.0, 10.0, 0.0
+  85.0, 180.0, 200.0, 40.0, 120.0, 20.0
 };
 
 /*  PDゲイン（複数自由度）
@@ -129,7 +129,7 @@ const float kd[6] = {
 };*/
 
 //  オブザーバゲイン
-//  オブザーバーの極(-λ₀の重根)600
+//  オブザーバーの極(-λ₀の重根)
 float lamda_0[6] = {300.0, 300.0, 300.0, 300.0, 300.0, 300.0};
 
 //  ゲイン
@@ -154,14 +154,14 @@ float z2[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-//  制御入力の係数100000
+//  制御入力の係数
 float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
 
 //  各要素(自由度)の誤差
-float errors[6] = {0, 0, 0, 0, 0, 0};
+float errors[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  ADRC計算値
 float outputADRC[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -193,7 +193,7 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //--RCフィルタ--------------------------------------------------------------------
 //  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
 //  カットオフ周波数:Hz, サンプリング周期:で設定
-const float coef_lpf_veab = 0;   //  VEAB(カットオフ周波数150Hz)
+const float coef_lpf_veab = 0.0;   //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
 
 //  ローパスフィルタの値保持変数
@@ -434,7 +434,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.println(POT_desired[2]);*/
     /*
-    Serial.print(",");*/
+    Serial.print(",");
     Serial.print(POT_realized[3]);
     Serial.print(",");
     Serial.print(z1[3]);
@@ -453,7 +453,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[3]);
     Serial.print(",");
-    Serial.println(POT_desired[3]);
+    Serial.println(POT_desired[3]);*/
     /*
     Serial.print(",");
     Serial.print(POT_realized[4]);
@@ -508,9 +508,9 @@ void thread_callback() {
     /*ピン4,5
     analogWrite(aout_channels[4], VEAB_desired[4]);
     analogWrite(aout_channels[5], VEAB_desired[5]);*/
-    /*ピン6,7*/
+    /*ピン6,7
     analogWrite(aout_channels[6], VEAB_desired[6]);
-    analogWrite(aout_channels[7], VEAB_desired[7]);
+    analogWrite(aout_channels[7], VEAB_desired[7]);*/
     /*ピン8,9
     analogWrite(aout_channels[8], VEAB_desired[8]);
     analogWrite(aout_channels[9], VEAB_desired[9]);*/
@@ -738,7 +738,7 @@ void setup() {
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
 
   //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
-  Serial.begin(9600);
+  //Serial.begin(9600);
 
   //  configure LED pin
   pinMode(LED, OUTPUT);

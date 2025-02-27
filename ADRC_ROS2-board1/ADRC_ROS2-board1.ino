@@ -107,17 +107,31 @@ volatile uint16_t pub[PUBLISH];
 volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
 //  目標値の初期値{腕の閉190-394開, 腕の下287-534上, 上腕の旋回内87-500外, 肘の伸124-635曲, 前腕の旋回内98-900外, 小指側縮48-822伸}
+/*No1
 volatile uint16_t POT_desired[6] = {
   258, 300, 390, 500, 600, 500
+};*/
+
+/*No2*/
+volatile uint16_t POT_desired[6] = {
+  260, 400, 180, 500, 600, 500
 };
 
 //---ADRC--------------------------------------------------------------------
-/*//  PDゲイン（単自由度）*/
+/*//  PDゲイン（単自由度）No1(2025/02/24)
 const float kp[6] = {
   3000.0, 4000.0, 3200.0, 600.0, 2000.0, 900.0
 };
 const float kd[6] = {
   85.0, 180.0, 200.0, 40.0, 120.0, 20.0
+};*/
+
+/*//  PDゲイン（単自由度）No2前腕の旋回は仮*/
+const float kp[6] = {
+  1200.0, 1000.0, 2000.0, 400.0, 2000.0, 600.0
+};
+const float kd[6] = {
+  65.0, 75.0, 220.0, 65.0, 120.0, 30.0
 };
 
 /*  PDゲイン（複数自由度）
@@ -129,7 +143,7 @@ const float kd[6] = {
 };*/
 
 //  オブザーバゲイン
-//  オブザーバーの極(-λ₀の重根)
+//  オブザーバーの極(-λ₀の重根) 
 float lamda_0[6] = {300.0, 300.0, 300.0, 300.0, 300.0, 300.0};
 
 //  ゲイン
@@ -154,7 +168,7 @@ float z2[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-//  制御入力の係数100000
+//  制御入力の係数
 float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
@@ -390,7 +404,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[0]);
     Serial.print(",");
-    Serial.println(POT_desired[0]);*/
+    Serial.print(POT_desired[0]);*/
     /*
     Serial.print(",");
     Serial.print(POT_realized[1]);
@@ -432,7 +446,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[2]);
     Serial.print(",");
-    Serial.println(POT_desired[2]);*/
+    Serial.print(POT_desired[2]);*/
     /*
     Serial.print(",");
     Serial.print(POT_realized[3]);
@@ -453,7 +467,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[3]);
     Serial.print(",");
-    Serial.println(POT_desired[3]);*/
+    Serial.print(POT_desired[3]);*/
     /*
     Serial.print(",");
     Serial.print(POT_realized[4]);
@@ -474,7 +488,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[4]);
     Serial.print(",");
-    Serial.println(POT_desired[4]);*/
+    Serial.print(POT_desired[4]);*/
     /*
     Serial.print(",");
     Serial.print(POT_realized[5]);

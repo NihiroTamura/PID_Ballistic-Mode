@@ -379,7 +379,7 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
-    /*
+    /**/
     Serial.print(POT_realized[0]);
     Serial.print(",");
     Serial.print(z1[0]);
@@ -398,13 +398,13 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[0]);
     Serial.print(",");
-    Serial.println(POT_desired[0]);*/
+    Serial.println(POT_desired[0]);
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1
+    /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);*/
+    analogWrite(aout_channels[1], VEAB_desired[1]);
     /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
     analogWrite(aout_channels[3], VEAB_desired[3]);*/
@@ -641,7 +641,7 @@ void setup() {
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
 
   //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
-  //Serial.begin(9600);
+  Serial.begin(9600);
 
   //  configure LED pin
   pinMode(LED, OUTPUT);

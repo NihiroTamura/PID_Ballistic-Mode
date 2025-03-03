@@ -385,7 +385,7 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
-    /*
+    /**/
     Serial.print(POT_realized[0]);
     Serial.print(",");
     Serial.print(z1[0]);
@@ -404,8 +404,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[0]);
     Serial.print(",");
-    Serial.print(POT_desired[0]);*/
-    /*
+    Serial.print(POT_desired[0]);
+    /**/
     Serial.print(",");
     Serial.print(POT_realized[1]);
     Serial.print(",");
@@ -425,8 +425,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[1]);
     Serial.print(",");
-    Serial.println(POT_desired[1]);*/
-    /*
+    Serial.print(POT_desired[1]);
+    /**/
     Serial.print(",");
     Serial.print(POT_realized[2]);
     Serial.print(",");
@@ -446,8 +446,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[2]);
     Serial.print(",");
-    Serial.print(POT_desired[2]);*/
-    /*
+    Serial.print(POT_desired[2]);
+    /**/
     Serial.print(",");
     Serial.print(POT_realized[3]);
     Serial.print(",");
@@ -467,8 +467,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[3]);
     Serial.print(",");
-    Serial.print(POT_desired[3]);*/
-    /*
+    Serial.print(POT_desired[3]);
+    /**/
     Serial.print(",");
     Serial.print(POT_realized[4]);
     Serial.print(",");
@@ -488,8 +488,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[4]);
     Serial.print(",");
-    Serial.print(POT_desired[4]);*/
-    /*
+    Serial.print(POT_desired[4]);
+    /**/
     Serial.print(",");
     Serial.print(POT_realized[5]);
     Serial.print(",");
@@ -509,28 +509,28 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[5]);
     Serial.print(",");
-    Serial.println(POT_desired[5]);*/
+    Serial.println(POT_desired[5]);
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1
+    /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);*/
-    /*ピン2,3
+    analogWrite(aout_channels[1], VEAB_desired[1]);
+    /*ピン2,3*/
     analogWrite(aout_channels[2], VEAB_desired[2]);
-    analogWrite(aout_channels[3], VEAB_desired[3]);*/
-    /*ピン4,5
+    analogWrite(aout_channels[3], VEAB_desired[3]);
+    /*ピン4,5*/
     analogWrite(aout_channels[4], VEAB_desired[4]);
-    analogWrite(aout_channels[5], VEAB_desired[5]);*/
-    /*ピン6,7
+    analogWrite(aout_channels[5], VEAB_desired[5]);
+    /*ピン6,7*/
     analogWrite(aout_channels[6], VEAB_desired[6]);
-    analogWrite(aout_channels[7], VEAB_desired[7]);*/
-    /*ピン8,9
+    analogWrite(aout_channels[7], VEAB_desired[7]);
+    /*ピン8,9*/
     analogWrite(aout_channels[8], VEAB_desired[8]);
-    analogWrite(aout_channels[9], VEAB_desired[9]);*/
-    /*ピン28,29
+    analogWrite(aout_channels[9], VEAB_desired[9]);
+    /*ピン28,29*/
     analogWrite(aout_channels[10], VEAB_desired[10]);
-    analogWrite(aout_channels[11], VEAB_desired[11]);*/
+    analogWrite(aout_channels[11], VEAB_desired[11]);
 
     //====================================
     // to here
@@ -752,7 +752,7 @@ void setup() {
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
 
   //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
-  //Serial.begin(9600);
+  Serial.begin(9600);
 
   //  configure LED pin
   pinMode(LED, OUTPUT);

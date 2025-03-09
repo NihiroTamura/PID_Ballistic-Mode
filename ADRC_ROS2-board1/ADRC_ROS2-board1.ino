@@ -751,8 +751,8 @@ void setup() {
   //   Teensyをmicro-ROSエージェントに接続するためのEthernet UDP設定(引数：MACアドレス, TeensyのIP, micro-ROSエージェントのIP, ポート番号)
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
 
-  //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
-  Serial.begin(9600);
+  //  シリアル通信を初期化する。ボーレートは115200bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
+  Serial.begin(115200);
 
   //  configure LED pin
   pinMode(LED, OUTPUT);

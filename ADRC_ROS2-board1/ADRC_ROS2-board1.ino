@@ -126,7 +126,7 @@ const float kd[6] = {
   85.0, 180.0, 200.0, 40.0, 120.0, 20.0
 };*/
 
-/*//  PDゲイン（単自由度）No2(2025/02/26)*/
+/*//  PDゲイン（単自由度）No2前腕の旋回は仮*/
 const float kp[6] = {
   1200.0, 1000.0, 2000.0, 400.0, 2000.0, 600.0
 };
@@ -751,8 +751,8 @@ void setup() {
   //   Teensyをmicro-ROSエージェントに接続するためのEthernet UDP設定(引数：MACアドレス, TeensyのIP, micro-ROSエージェントのIP, ポート番号)
   set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9999);
 
-  //  シリアル通信を初期化する。ボーレートは115200bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
-  Serial.begin(115200);
+  //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
+  Serial.begin(9600);
 
   //  configure LED pin
   pinMode(LED, OUTPUT);

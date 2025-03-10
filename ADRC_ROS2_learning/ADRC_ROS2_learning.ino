@@ -211,18 +211,25 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //  カットオフ周波数:Hz, サンプリング周期:で設定
 const float coef_lpf_veab = 0.0;   //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
+const float coef_lpf_lookuptable = 0.89;  //  ルックアップテーブル(カットオフ周波数20Hz)
 
 //  ローパスフィルタの値保持変数
-int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //  VEAB
-float omega_filter[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};     //  角速度
+int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};       //  VEAB
+float omega_filter[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};           //  角速度
+float lookuptable0_filter[2000][6] = {0};                               //  ルックアップテーブル
+float lookuptable1_filter[2000][6] = {0};                               //  ルックアップテーブル
 
 //  ローパスフィルタ用前回の値保持変数
-int previous_value_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //  VEAB
-float previous_value_omega[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};     //  角速度
+int previous_value_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};       //  VEAB
+float previous_value_omega[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};           //  角速度
+float previous_value_lookuptable0[2000][6] = {0};                               //  ルックアップテーブル
+float previous_value_lookuptable1[2000][6] = {0};                               //  ルックアップテーブル
 
 //  ローパスフィルタ用初回判定
 int initial_lpf_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  // VEAB
 int initial_lpf_omega[6] = {0, 0, 0, 0, 0, 0};                    //  角速度
+DMAMEM int initial_lpf_lookuptable0[2000][6] = {0};                            //  ルックアップテーブル
+DMAMEM int initial_lpf_lookuptable1[2000][6] = {0};                            //  ルックアップテーブル
 
 //--移動平均法--------------------------------------------------------------------
 //  ローパスフィルタ適用POT値格納構造体
@@ -487,6 +494,8 @@ void thread_callback() {
     Serial.print(try_count);
     Serial.print(",");
     Serial.print(g_function[0]);
+    Serial.print(",");
+    Serial.print(initial_lpf_lookuptable0[roop_count][0]);
     Serial.print(",");
     Serial.print(POT_realized[0]);
     Serial.print(",");
@@ -776,11 +785,44 @@ Result calculate_veab_Values(float outputADRC_derect, int i) {
 //  ルックアップテーブル更新
 void update_lookup_table(int index, int roop){
   g_function[index] = alpha + (1-alpha)*exp(-pow(z3[index]/epsilon, 2));
+
   if(lookup_direction == 0){
     lookup_table0[roop][index] = lookup_table0[roop][index] * g_function[index] + (1-alpha) * z3[index];
 
+    //  RCローパスフィルタ適用(ルックアップテーブル)
+    for(int i = 0; i < 6; i++){
+
+      //  ローパスフィルタ関数呼び出し
+      lookuptable0_filter[roop][index] = RC_LPF_float(lookup_table0[roop][index], previous_value_lookuptable0[roop][index], initial_lpf_lookuptable0[roop][index], coef_lpf_lookuptable);
+
+      initial_lpf_lookuptable0[roop][index] = 1;
+
+      //  ルックアップテーブルに格納
+      lookup_table0[roop][index] = lookuptable0_filter[roop][index];
+
+      //  前回の微分値に格納
+      previous_value_lookuptable0[roop][index] = lookuptable0_filter[roop][index];
+      
+    }
+
   }else{
     lookup_table1[roop][index] = lookup_table1[roop][index] * g_function[index] + (1-alpha) * z3[index];
+
+    //  RCローパスフィルタ適用(ルックアップテーブル)
+    for(int i = 0; i < 6; i++){
+
+      //  ローパスフィルタ関数呼び出し
+      lookuptable1_filter[roop][index] = RC_LPF_float(lookup_table1[roop][index], previous_value_lookuptable1[roop][index], initial_lpf_lookuptable1[roop][index], coef_lpf_lookuptable);
+
+      initial_lpf_lookuptable1[roop][index] = 1;
+
+      //  ルックアップテーブルに格納
+      lookup_table1[roop][index] = lookuptable1_filter[roop][index];
+
+      //  前回の微分値に格納
+      previous_value_lookuptable1[roop][index] = lookuptable1_filter[roop][index];
+      
+    }
 
   }
 
@@ -993,6 +1035,10 @@ void setup() {
   RCCHECK(rclc_executor_add_timer(&executor, &timer));
 
   //======setup関数内での実行処理==============================
+  //  ルックアップテーブルのローパスフィルタ初回判定値の初期化
+  memset(initial_lpf_lookuptable0, 0, sizeof(initial_lpf_lookuptable0));
+  memset(initial_lpf_lookuptable1, 0, sizeof(initial_lpf_lookuptable1));
+
   //  VEABの初期化
   /*ピン0,1*/
   analogWrite(aout_channels[0], 143);

@@ -487,6 +487,34 @@ void thread_callback() {
         }
         
       }else{
+        //  シリアルモニタに表示
+        /**/
+        Serial.print(lookup_direction);
+        Serial.print(",");
+        Serial.print(roop_count);
+        Serial.print(",");
+        Serial.print(try_count);
+        Serial.print(",");
+        Serial.print(g_function[0]);
+        Serial.print(",");
+        Serial.print(POT_realized[0]);
+        Serial.print(",");
+        Serial.print(z1[0]);
+        Serial.print(",");
+        Serial.print(derivatives[0]);
+        Serial.print(",");
+        Serial.print(z2[0]);
+        Serial.print(",");
+        Serial.print(z3[0]);
+        Serial.print(",");
+        Serial.print(lookup_table0[roop_count][0]);
+        Serial.print(",");
+        Serial.print(lookup_table1[roop_count][0]);
+        Serial.print(",");
+        Serial.print(outputADRC[0]);
+        Serial.print(",");
+        Serial.println(POT_desired[0]);
+
         //  ループ数を計算
         roop_count += 1;
 

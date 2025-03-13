@@ -205,7 +205,7 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //  カットオフ周波数:Hz, サンプリング周期:で設定
 const float coef_lpf_veab = 0.0;          //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;        //  角速度(カットオフ周波数150Hz)
-const float coef_lpf_lookuptable = 0.89;  //  ルックアップテーブル(カットオフ周波数20Hz)
+const float coef_lpf_lookuptable = 0.99;  //  ルックアップテーブル(カットオフ周波数20Hz)
 
 //  ローパスフィルタの値保持変数
 int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};       //  VEAB
@@ -273,8 +273,8 @@ float lookup_table0[gyou][retsu];
 float lookup_table1[gyou][retsu];
 
 //  更新パラメータ
-int epsilon = 500;
-float alpha = 0.9;
+int epsilon = 50;
+float alpha = 0.999;
 float g_function[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  学習ループ数
@@ -439,6 +439,34 @@ void thread_callback() {
           update_lookup_table(i, roop_count);
         }
 
+        //  シリアルモニタに表示
+        /**/
+        Serial.print(lookup_direction);
+        Serial.print(",");
+        Serial.print(roop_count);
+        Serial.print(",");
+        Serial.print(try_count);
+        Serial.print(",");
+        Serial.print(g_function[0]);
+        Serial.print(",");
+        Serial.print(POT_realized[0]);
+        Serial.print(",");
+        Serial.print(z1[0]);
+        Serial.print(",");
+        Serial.print(derivatives[0]);
+        Serial.print(",");
+        Serial.print(z2[0]);
+        Serial.print(",");
+        Serial.print(z3[0]);
+        Serial.print(",");
+        Serial.print(lookup_table0[roop_count][0]);
+        Serial.print(",");
+        Serial.print(lookup_table1[roop_count][0]);
+        Serial.print(",");
+        Serial.print(outputADRC[0]);
+        Serial.print(",");
+        Serial.println(POT_desired[0]);
+
         //  ループ数を計算
         roop_count += 1;
 
@@ -480,32 +508,34 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
-    /**/
-    Serial.print(lookup_direction);
-    Serial.print(",");
-    Serial.print(roop_count);
-    Serial.print(",");
-    Serial.print(try_count);
-    Serial.print(",");
-    Serial.print(g_function[0]);
-    Serial.print(",");
-    Serial.print(POT_realized[0]);
-    Serial.print(",");
-    Serial.print(z1[0]);
-    Serial.print(",");
-    Serial.print(derivatives[0]);
-    Serial.print(",");
-    Serial.print(z2[0]);
-    Serial.print(",");
-    Serial.print(z3[0]);
-    Serial.print(",");
-    Serial.print(lookup_table0[roop_count][0]);
-    Serial.print(",");
-    Serial.print(lookup_table1[roop_count][0]);
-    Serial.print(",");
-    Serial.print(outputADRC[0]);
-    Serial.print(",");
-    Serial.println(POT_desired[0]);
+    if(lookup_direction == 2){
+      /**/
+      Serial.print(lookup_direction);
+      Serial.print(",");
+      Serial.print(roop_count);
+      Serial.print(",");
+      Serial.print(try_count);
+      Serial.print(",");
+      Serial.print(g_function[0]);
+      Serial.print(",");
+      Serial.print(POT_realized[0]);
+      Serial.print(",");
+      Serial.print(z1[0]);
+      Serial.print(",");
+      Serial.print(derivatives[0]);
+      Serial.print(",");
+      Serial.print(z2[0]);
+      Serial.print(",");
+      Serial.print(z3[0]);
+      Serial.print(",");
+      Serial.print(lookup_table0[roop_count][0]);
+      Serial.print(",");
+      Serial.print(lookup_table1[roop_count][0]);
+      Serial.print(",");
+      Serial.print(outputADRC[0]);
+      Serial.print(",");
+      Serial.println(POT_desired[0]);
+    }
 
 
     //------VEABへ出力--------------------------------------------------------------------
@@ -625,9 +655,11 @@ void ADRC(int index, int roop){
   if(lookup_direction == 0){
     outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index] - lookup_table0[roop][index]) / input_coef[index];
 
-  }else{
+  }else if(lookup_direction == 1){
     outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index] - lookup_table1[roop][index]) / input_coef[index];
 
+  }else{
+    outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
   }
 
   //  アンドロイドのアクチュエータの要件（ポテンショメータの正方向と入力の正方向を一致させる）

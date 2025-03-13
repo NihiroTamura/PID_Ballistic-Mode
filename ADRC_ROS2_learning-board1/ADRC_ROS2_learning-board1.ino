@@ -211,7 +211,7 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //  カットオフ周波数:Hz, サンプリング周期:で設定
 const float coef_lpf_veab = 0.0;   //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
-const float coef_lpf_lookuptable = 0.99;  //  ルックアップテーブル(カットオフ周波数2Hz)
+const float coef_lpf_lookuptable = 0.95;  //  ルックアップテーブル(カットオフ周波数2Hz)
 
 //  ローパスフィルタの値保持変数
 int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};       //  VEAB
@@ -280,7 +280,7 @@ float lookup_table1[gyou][retsu];
 
 //  更新パラメータ
 int epsilon = 50;
-float alpha = 0.999;
+float alpha = 0.9;
 float g_function[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  学習ループ数

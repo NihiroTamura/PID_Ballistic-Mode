@@ -136,10 +136,10 @@ const float kd[6] = {
 
 /*//  PDゲイン（単自由度）No3*/
 const float kp[6] = {
-  2000.0, 3000.0, 9000.0, 17000.0, 7000.0, 600.0
+  2000.0, 3000.0, 9000.0, 17000.0, 7000.0, 18000.0
 };
 const float kd[6] = {
-  70.0, 120.0, 700.0, 2000.0, 400.0, 30.0
+  70.0, 120.0, 700.0, 2000.0, 400.0, 300.0
 };
 
 /*  PDゲイン（複数自由度）
@@ -181,7 +181,7 @@ float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};*/
 
 /*No3*/
-float input_coef[6] = {4500.0, 8000.0, 20000.0, 70000.0, 20000.0, 10000.0};
+float input_coef[6] = {4500.0, 8000.0, 20000.0, 70000.0, 20000.0, 40000.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
@@ -502,7 +502,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(POT_desired[4]);*/
     /*
-    Serial.print(",");*/
+    Serial.print(",");
     Serial.print(POT_realized[5]);
     Serial.print(",");
     Serial.print(z1[5]);
@@ -521,7 +521,7 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[5]);
     Serial.print(",");
-    Serial.println(POT_desired[5]);
+    Serial.println(POT_desired[5]);*/
 
 
     //------VEABへ出力--------------------------------------------------------------------
@@ -540,9 +540,9 @@ void thread_callback() {
     /*ピン8,9
     analogWrite(aout_channels[8], VEAB_desired[8]);
     analogWrite(aout_channels[9], VEAB_desired[9]);*/
-    /*ピン28,29*/
+    /*ピン28,29
     analogWrite(aout_channels[10], VEAB_desired[10]);
-    analogWrite(aout_channels[11], VEAB_desired[11]);
+    analogWrite(aout_channels[11], VEAB_desired[11]);*/
 
     //====================================
     // to here

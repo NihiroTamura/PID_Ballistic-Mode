@@ -1,9 +1,9 @@
 //=============================================================================================================================================
 //------周期--------------------------------------------------------------------
-//　制御周期(単位：ms)
+//  制御周期(単位：ms)
 #define CONTROL_PERIOD_MS 1
 
-//　ROSのPublishする周期(単位：ms)
+//  ROSのPublishする周期(単位：ms)
 #define PUB_PERIOD_MS 10
 
 //------LEDの定義ピン--------------------------------------------------------------------
@@ -11,7 +11,7 @@
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
 #define TEENSY_IP 192, 168, 1, 116 // IP that the teensy 4.1 will have
-#define AGENT_IP 192, 168, 1, 201 // IP where a micro-ros agent waits
+#define AGENT_IP 192, 168, 1, 183 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_float/sub"
@@ -33,11 +33,11 @@
 #define SUBSCRIBE 6 + 1 + PARAMETER //  POT_DESIRED + 7自由度目の目標値 + PARAMETER
 
 //------AD/DA conv channels--------------------------------------------------------------------
-//　アナログ入力のピン数
+//  アナログ入力のピン数
 //#define ANALOG_IN_CH 18
 #define ANALOG_IN_CH 6
 
-//　アナログ出力のピン数
+//  アナログ出力のピン数
 #define ANALOG_OUT_CH 12
 
 //  VEABのアナログ出力(14～25),POTのアナログ出力(26～41)
@@ -97,10 +97,10 @@ rcl_timer_t timer;
 //=============================================================================================================================================
 
 //------グローバル変数の定義--------------------------------------------------------------------
-//　subscribeメッセージの配列
+//  subscribeメッセージの配列
 volatile float sub[SUBSCRIBE];
 
-//　publishメッセージの配列
+//  publishメッセージの配列
 volatile uint16_t pub[PUBLISH];
 
 //  POT値
@@ -112,7 +112,7 @@ volatile uint16_t POT_desired[6] = {
   258, 300, 390, 500, 600, 500
 };*/
 
-/*No2*/
+/*No2, No3*/
 volatile uint16_t POT_desired[6] = {
   260, 400, 180, 500, 600, 500
 };
@@ -126,12 +126,20 @@ const float kd[6] = {
   85.0, 180.0, 200.0, 40.0, 120.0, 20.0
 };*/
 
-/*//  PDゲイン（単自由度）No2(2025/02/26)*/
+/*//  PDゲイン（単自由度）No2(2025/02/26)
 const float kp[6] = {
   1200.0, 1000.0, 2000.0, 400.0, 2000.0, 600.0
 };
 const float kd[6] = {
   65.0, 75.0, 220.0, 65.0, 120.0, 30.0
+};*/
+
+/*//  PDゲイン（単自由度）No3*/
+const float kp[6] = {
+  2000.0, 3000.0, 9000.0, 17000.0, 7000.0, 600.0
+};
+const float kd[6] = {
+  70.0, 120.0, 700.0, 2000.0, 400.0, 30.0
 };
 
 /*  PDゲイン（複数自由度）
@@ -169,7 +177,11 @@ float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  制御入力の係数
-float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};
+/*No1,No2
+float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};*/
+
+/*No3*/
+float input_coef[6] = {4500.0, 8000.0, 20000.0, 70000.0, 20000.0, 10000.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
@@ -205,7 +217,7 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 //---ローパスフィルタ--------------------------------------------------------------------
 //--RCフィルタ--------------------------------------------------------------------
-//  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
+//  ローパスフィルタの係数  係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
 //  カットオフ周波数:Hz, サンプリング周期:で設定
 const float coef_lpf_veab = 0.0;   //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
@@ -271,7 +283,7 @@ void get_teensy_mac(uint8_t *mac) {
     for(uint8_t by=0; by<4; by++) mac[by+2]=(HW_OCOTP_MAC0 >> ((3-by)*8)) & 0xFF;
 }
 
-//　エラー関数
+//  エラー関数
 void error_loop(){
   while(1){
     //  エラー状態のときLED点滅
@@ -280,7 +292,7 @@ void error_loop(){
   }
 }
 
-//　スレッドに追加した関数
+//  スレッドに追加した関数
 void thread_callback() {
   while(1) {
     int t0 = millis();
@@ -303,12 +315,12 @@ void thread_callback() {
       POT_realized[4] = pot.POT4;
       POT_realized[5] = pot.POT5;
 
-      // 各ポテンショメータのデータをリングバッファ(角速度計算用)に追加
+      //  各ポテンショメータのデータをリングバッファ(角速度計算用)に追加
       for (int i = 0; i < OMEGA; i++) {
         omegaBuffers[i].unshift(POT_realized[i]);
       }
 
-      // 各ポテンショメータの微分値を計算
+      //  各ポテンショメータの微分値を計算
       for (int i = 0; i < OMEGA; i++) {
         derivatives[i] = calculateDerivative(omegaBuffers[i]);
       }
@@ -385,7 +397,7 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
-    /**/
+    /*
     Serial.print(POT_realized[0]);
     Serial.print(",");
     Serial.print(z1[0]);
@@ -404,8 +416,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[0]);
     Serial.print(",");
-    Serial.print(POT_desired[0]);
-    /**/
+    Serial.print(POT_desired[0]);*/
+    /*
     Serial.print(",");
     Serial.print(POT_realized[1]);
     Serial.print(",");
@@ -425,8 +437,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[1]);
     Serial.print(",");
-    Serial.print(POT_desired[1]);
-    /**/
+    Serial.print(POT_desired[1]);*/
+    /*
     Serial.print(",");
     Serial.print(POT_realized[2]);
     Serial.print(",");
@@ -446,8 +458,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[2]);
     Serial.print(",");
-    Serial.print(POT_desired[2]);
-    /**/
+    Serial.print(POT_desired[2]);*/
+    /*
     Serial.print(",");
     Serial.print(POT_realized[3]);
     Serial.print(",");
@@ -467,8 +479,8 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[3]);
     Serial.print(",");
-    Serial.print(POT_desired[3]);
-    /**/
+    Serial.print(POT_desired[3]);*/
+    /*
     Serial.print(",");
     Serial.print(POT_realized[4]);
     Serial.print(",");
@@ -488,9 +500,9 @@ void thread_callback() {
     Serial.print(",");
     Serial.print(outputADRC[4]);
     Serial.print(",");
-    Serial.print(POT_desired[4]);
-    /**/
-    Serial.print(",");
+    Serial.print(POT_desired[4]);*/
+    /*
+    Serial.print(",");*/
     Serial.print(POT_realized[5]);
     Serial.print(",");
     Serial.print(z1[5]);
@@ -513,21 +525,21 @@ void thread_callback() {
 
 
     //------VEABへ出力--------------------------------------------------------------------
-    /*ピン0,1*/
+    /*ピン0,1
     analogWrite(aout_channels[0], VEAB_desired[0]);
-    analogWrite(aout_channels[1], VEAB_desired[1]);
-    /*ピン2,3*/
+    analogWrite(aout_channels[1], VEAB_desired[1]);*/
+    /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
-    analogWrite(aout_channels[3], VEAB_desired[3]);
-    /*ピン4,5*/
+    analogWrite(aout_channels[3], VEAB_desired[3]);*/
+    /*ピン4,5
     analogWrite(aout_channels[4], VEAB_desired[4]);
-    analogWrite(aout_channels[5], VEAB_desired[5]);
-    /*ピン6,7*/
+    analogWrite(aout_channels[5], VEAB_desired[5]);*/
+    /*ピン6,7
     analogWrite(aout_channels[6], VEAB_desired[6]);
-    analogWrite(aout_channels[7], VEAB_desired[7]);
-    /*ピン8,9*/
+    analogWrite(aout_channels[7], VEAB_desired[7]);*/
+    /*ピン8,9
     analogWrite(aout_channels[8], VEAB_desired[8]);
-    analogWrite(aout_channels[9], VEAB_desired[9]);
+    analogWrite(aout_channels[9], VEAB_desired[9]);*/
     /*ピン28,29*/
     analogWrite(aout_channels[10], VEAB_desired[10]);
     analogWrite(aout_channels[11], VEAB_desired[11]);
@@ -550,26 +562,26 @@ void thread_callback() {
   }
 }
 
-//　Publish関数（ROS2）
+//  Publish関数（ROS2）
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {
   //  引数last_call_timeは使わない
   RCLC_UNUSED(last_call_time);
 
   if (timer != NULL) {
-    //　Publlishするメッセージmsg_pubに格納
+    //  Publlishするメッセージmsg_pubに格納
     for (size_t i = 0; i < PUBLISH; i++) {
       msg_pub.data.data[i] = pub[i];
     }
-    //　メッセージをトピックに送信
+    //  メッセージをトピックに送信
     RCSOFTCHECK(rcl_publish(&publisher, &msg_pub, NULL));
   }
 }
 
-//　Subscribe関数（ROS2）
+//  Subscribe関数（ROS2）
 void subscription_callback(const void * msgin)
 {
-  //　受け取ったメッセージmsginをstd_msgs__msg__Float32MultiArray型にキャスト
+  //  受け取ったメッセージmsginをstd_msgs__msg__Float32MultiArray型にキャスト
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
   //  Subscribeしたメッセージを格納
   for (size_t i = 0; i < SUBSCRIBE; i++) {
@@ -603,7 +615,7 @@ void ESO(int index){
   z1[index] += dz1[index] * 0.001;
   //  角速度
   z2[index] += dz2[index] * 0.001;
-  //　外乱
+  //  外乱
   z3[index] += dz3[index] * 0.001;
 
 }
@@ -631,8 +643,8 @@ void ADRC(int index){
 Result calculate_veab_Values(float outputADRC_derect, int i) {
   Result result;
   if(i == 0){
-    result.veab_value1 = 143 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 113 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 141 + (outputADRC_derect / 2.0);  
+    result.veab_value2 = 115 - (outputADRC_derect / 2.0);
   } else if(i == 1){
     result.veab_value1 = 126 + (outputADRC_derect / 2.0);  
     result.veab_value2 = 130 - (outputADRC_derect / 2.0);
@@ -773,7 +785,7 @@ void setup() {
 
   //------allocate message variables（pubもsubも1行目の右辺のみ変更可。その他はコピペ）--------------------------------------------------------------------
   //  1.メッセージ変数の初期化段階（メモリを確保し、デフォルト状態に設定）
-  //　メッセージ変数msg_pubに対して、メモリの確保と初期化
+  //  メッセージ変数msg_pubに対して、メモリの確保と初期化
   msg_pub.data.capacity = PUBLISH; //  data配列の最大要素数=メッセージの要素数
   msg_pub.data.size = 0;  //　メッセージ送信時のデータの初期化の保証
   msg_pub.data.data = (uint16_t*)malloc(msg_pub.data.capacity * sizeof(uint16_t));  //　data配列に必要なメモリを動的に確保
@@ -865,8 +877,8 @@ void setup() {
   //======setup関数内での実行処理==============================
   //  VEABの初期化
   /*ピン0,1*/
-  analogWrite(aout_channels[0], 143);
-  analogWrite(aout_channels[1], 113);
+  analogWrite(aout_channels[0], 141);
+  analogWrite(aout_channels[1], 115);
   /*ピン2,3*/
   analogWrite(aout_channels[2], 126);
   analogWrite(aout_channels[3], 130);

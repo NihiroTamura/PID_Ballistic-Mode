@@ -183,7 +183,7 @@ float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};*/
 
 /*No3*/
-float input_coef[6] = {4500.0, 8000.0, 20000.0, 70000.0, 20000.0, 40000.0};
+float input_coef[6] = {5500.0, 8000.0, 20000.0, 70000.0, 20000.0, 40000.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
@@ -277,10 +277,11 @@ float h = 0.001;   //  初期値を設定（秒単位）
 float derivatives[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //---FF(フィードフォワード)項--------------------------------------------------------------------
-//  数式  u_ff = \alpha \cdot e^{-\lambda t_ff} + \beta
+//  数式  u_ff = \alpha \cdot e^{-\lambda t_ff} + \beta or u_ff = \alpha \cdot e^{-\lambda t_ff}
 //  係数
-float alpha[6] = {-106798.6234, -388541.1749, -2174912.413, -167009.5754, 2529201.593, 1132568.942};
-float beta[6] = {-199889.3299, -481260.6133, -414763.25, -2383632.066, 482998.1356, 1563773.682};
+float alpha[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+//float alpha[6] = {-106798.6234, -388541.1749, -2174912.413, -167009.5754, 2529201.593, 1132568.942};
+//float beta[6] = {-199889.3299, -481260.6133, -414763.25, -2383632.066, 482998.1356, 1563773.682};
 float lambda[6] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
 
 //  時間変数
@@ -293,6 +294,12 @@ int t_check[6] = {0, 0, 0, 0, 0, 0};
 
 //  フィードフォワード項
 float u_ff[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+//  1ステップ前の目標値
+int Pre_POT_desired[6] = {0, 0, 0, 0, 0, 0};
+
+//  FF項の切り替え判定値
+int FF_check[6] = {0, 0, 0, 0, 0, 0};
 
 //=============================================================================================================================================
 
@@ -414,6 +421,11 @@ void thread_callback() {
       VEAB_desired[2*i] = ADRC_PWM[2*i];
       VEAB_desired[2*i+1] = ADRC_PWM[2*i+1];
 
+    }
+
+    //  現在の目標値を1ステップ前の目標値に格納
+    for(int i = 0; i < 6; i++){
+      Pre_POT_desired[i] = POT_desired[i];
     }
 
     //  シリアルモニタに表示
@@ -638,6 +650,7 @@ void ESO(int index){
 
   //  目標値を受け取ったらFF項関数をスタート
   if(sub_count == 1){
+    FF_check_function(index);
     FF_function(index);
   }
 
@@ -713,6 +726,36 @@ Result calculate_veab_Values(float outputADRC_derect, int i) {
   return result;
 }
 
+//  FF項切り替え関数
+void FF_check_function(int index){
+  if(POT_desired[index] != Pre_POT_desired[index]){
+    t_check[index] = 0;
+    FF_check[index] = 1;
+
+    if(Pre_POT_desired[index] < POT_desired[index]){
+
+      if(z3[index] < 0){
+        alpha[index] = z3[index];
+      }else{
+        alpha[index] = -z3[index];
+      }
+
+    }else{
+
+      if(z3[index] < 0){
+        alpha[index] = -z3[index];
+      }else{
+        alpha[index] = z3[index];
+      }
+
+    }
+
+  }else{
+    t_check[index] = 1;
+    FF_check[index] = 0;
+  }
+}
+
 //  FF項(推定外乱に基づく)関数
 void FF_function(int index){
   if(t_check[index] == 0){
@@ -724,7 +767,8 @@ void FF_function(int index){
   t_ff_current[index] = millis();
   t_ff[index] = t_ff_current[index] - t_ff_start[index];
 
-  u_ff[index] = alpha[index] * exp(-lambda[index]*t_ff[index]/1000) + beta[index];
+  u_ff[index] = alpha[index] * exp(-lambda[index]*t_ff[index]/1000);
+  //u_ff[index] = alpha[index] * exp(-lambda[index]*t_ff[index]/1000) + beta[index];
 }
 
 //  微分値計算関数

@@ -288,6 +288,12 @@ int t_check[6] = {0, 0, 0, 0, 0, 0};
 //  フィードフォワード項
 float u_ff[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
+//  1ステップ前の目標値
+int Pre_POT_desired[6] = {0, 0, 0, 0, 0, 0};
+
+//  FF項の切り替え判定値
+int FF_check[6] = {0, 0, 0, 0, 0, 0};
+
 //=============================================================================================================================================
 
 //------関数の定義--------------------------------------------------------------------
@@ -410,6 +416,11 @@ void thread_callback() {
 
     }
 
+    //  現在の目標値を1ステップ前の目標値に格納
+    for(int i = 0; i < 6; i++){
+      Pre_POT_desired[i] = POT_desired[i];
+    }
+
     //  シリアルモニタに表示
     /**/
     Serial.print(POT_realized[0]);
@@ -517,6 +528,7 @@ void ESO(int index){
 
   //  目標値を受け取ったらFF項関数をスタート
   if(sub_count == 1){
+    FF_check_function(index);
     FF_function(index);
   }
 
@@ -592,6 +604,36 @@ Result calculate_veab_Values(float outputADRC_derect, int i) {
   return result;
 }
 
+//  FF項切り替え関数
+void FF_check_function(int index){
+  if(POT_desired[index] != Pre_POT_desired[index]){
+    t_check[index] = 0;
+    FF_check[index] = 1;
+
+    if(Pre_POT_desired[index] < POT_desired[index]){
+
+      if(z3[index] < 0){
+        alpha[index] = z3[index];
+      }else{
+        alpha[index] = -z3[index];
+      }
+
+    }else{
+
+      if(z3[index] < 0){
+        alpha[index] = -z3[index];
+      }else{
+        alpha[index] = z3[index];
+      }
+
+    }
+
+  }else{
+    t_check[index] = 1;
+    FF_check[index] = 0;
+  }
+}
+
 //  FF項(推定外乱に基づく)関数
 void FF_function(int index){
   if(t_check[index] == 0){
@@ -603,7 +645,8 @@ void FF_function(int index){
   t_ff_current[index] = millis();
   t_ff[index] = t_ff_current[index] - t_ff_start[index];
 
-  u_ff[index] = alpha[index] * exp(-lambda[index]*t_ff[index]/1000) + beta[index];
+  u_ff[index] = alpha[index] * exp(-lambda[index]*t_ff[index]/1000);
+  //u_ff[index] = alpha[index] * exp(-lambda[index]*t_ff[index]/1000) + beta[index];
 }
 
 //  微分値計算関数

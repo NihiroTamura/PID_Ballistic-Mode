@@ -879,6 +879,7 @@ Result_LPF Moving_LPF() {
   return lpf;
 }
 
+//  シリアルモニタ関数
 void SerialPrint_function(){
   /**/
   Serial.print(lookup_direction);

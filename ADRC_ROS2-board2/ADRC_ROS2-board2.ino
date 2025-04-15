@@ -391,27 +391,7 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
-    /**/
-    Serial.print(POT_realized[0]);
-    Serial.print(",");
-    Serial.print(z1[0]);
-    Serial.print(",");
-    Serial.print(dz1[0]);
-    Serial.print(",");
-    Serial.print(derivatives[0]);
-    Serial.print(",");
-    Serial.print(z2[0]);
-    Serial.print(",");
-    Serial.print(dz2[0]);
-    Serial.print(",");
-    Serial.print(z3[0]);
-    Serial.print(",");
-    Serial.print(dz3[0]);
-    Serial.print(",");
-    Serial.print(outputADRC[0]);
-    Serial.print(",");
-    Serial.println(POT_desired[0]);
-
+    SerialPrint_function();
 
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1*/
@@ -636,6 +616,30 @@ Result_LPF Moving_LPF() {
   lpf.POT5 = POT[5];
 
   return lpf;
+}
+
+//  シリアルモニタ関数
+void SerialPrint_function(){
+  /**/
+  Serial.print(POT_realized[0]);
+  Serial.print(",");
+  Serial.print(z1[0]);
+  Serial.print(",");
+  Serial.print(dz1[0]);
+  Serial.print(",");
+  Serial.print(derivatives[0]);
+  Serial.print(",");
+  Serial.print(z2[0]);
+  Serial.print(",");
+  Serial.print(dz2[0]);
+  Serial.print(",");
+  Serial.print(z3[0]);
+  Serial.print(",");
+  Serial.print(dz3[0]);
+  Serial.print(",");
+  Serial.print(outputADRC[0]);
+  Serial.print(",");
+  Serial.println(POT_desired[0]);
 }
 
 //=============================================================================================================================================

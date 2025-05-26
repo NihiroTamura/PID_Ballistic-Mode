@@ -11,7 +11,7 @@
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
 #define TEENSY_IP 192, 168, 1, 117 // IP that the teensy 4.1 will have
-#define AGENT_IP 192, 168, 1, 201 // IP where a micro-ros agent waits
+#define AGENT_IP 192, 168, 1, 167 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_float/sub"
@@ -108,7 +108,7 @@ volatile uint16_t pub[PUBLISH];
 //  POT値
 volatile uint16_t POT_realized[6] = {0, 0, 0, 0, 0, 0};
 
-//  目標値の初期値{親指側縮1-640伸, 0, 0, 0, 0, 0} No1,No2
+//  目標値の初期値{親指側縮1-640伸, 0, 0, 0, 0, 0} No1,No2,No3
 volatile uint16_t POT_desired[6] = {
   500, 0, 0, 0, 0, 0
 };
@@ -122,12 +122,20 @@ const float kd[6] = {
   23.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };*/
 
-/*//  PDゲイン（単自由度）No2(2025/02/26)*/
+/*//  PDゲイン（単自由度）No2(2025/02/26)
 const float kp[6] = {
   400.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
   30.0, 0.0, 0.0, 0.0, 0.0, 0.0
+};*/
+
+/*//  PDゲイン（単自由度）No3(2025/03/31)*/
+const float kp[6] = {
+  10000.0, 0.0, 0.0, 0.0, 0.0, 0.0
+};
+const float kd[6] = {
+  250.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 
 /*  PDゲイン（複数自由度）
@@ -165,7 +173,11 @@ float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  制御入力の係数
-float input_coef[6] = {10000.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+/*No1,No2
+float input_coef[6] = {10000.0, 0.0, 0.0, 0.0, 0.0, 0.0};*/
+
+/*No3*/
+float input_coef[6] = {40000.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, 0, 0, 0, 0, 0};
@@ -205,7 +217,7 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //  カットオフ周波数:Hz, サンプリング周期:で設定
 const float coef_lpf_veab = 0.0;          //  VEAB(カットオフ周波数150Hz)
 const float coef_lpf_omega = 0.52;        //  角速度(カットオフ周波数150Hz)
-const float coef_lpf_lookuptable = 0.95;  //  ルックアップテーブル(カットオフ周波数20Hz)
+const float coef_lpf_lookuptable = 0.0;  //  ルックアップテーブル(カットオフ周波数20Hz)
 
 //  ローパスフィルタの値保持変数
 int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};       //  VEAB
@@ -272,10 +284,11 @@ float derivatives[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float lookup_table0[gyou][retsu];
 float lookup_table1[gyou][retsu];
 
+//  学習トルクとADRCトルクの足算値
+float outputADRC_sum[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
 //  更新パラメータ
-int epsilon = 50;
-float alpha = 0.9;
-float g_function[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+float alpha = 0.01;
 
 //  学習ループ数
 int roop_count = 0;
@@ -296,7 +309,7 @@ volatile uint16_t POT_desired0[6] = {
 
 //  試行回数
 int try_count = 0;
-int try_max = 200;
+int try_max = 100;
 
 //=============================================================================================================================================
 
@@ -434,38 +447,13 @@ void thread_callback() {
       //  試行回数以下ではルックアップテーブルを更新
       if(try_count < try_max){
 
+        //  シリアルモニタに表示
+        SerialPrint_function();
+
         //  ルックアップテーブルを更新
         for(int i = 0; i < 6; i++){
           update_lookup_table(i, roop_count);
         }
-
-        //  シリアルモニタに表示
-        /**/
-        Serial.print(lookup_direction);
-        Serial.print(",");
-        Serial.print(roop_count);
-        Serial.print(",");
-        Serial.print(try_count);
-        Serial.print(",");
-        Serial.print(g_function[0]);
-        Serial.print(",");
-        Serial.print(POT_realized[0]);
-        Serial.print(",");
-        Serial.print(z1[0]);
-        Serial.print(",");
-        Serial.print(derivatives[0]);
-        Serial.print(",");
-        Serial.print(z2[0]);
-        Serial.print(",");
-        Serial.print(z3[0]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][0]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][0]);
-        Serial.print(",");
-        Serial.print(outputADRC[0]);
-        Serial.print(",");
-        Serial.println(POT_desired[0]);
 
         //  ループ数を計算
         roop_count += 1;
@@ -488,32 +476,7 @@ void thread_callback() {
         
       }else{
         //  シリアルモニタに表示
-        /**/
-        Serial.print(lookup_direction);
-        Serial.print(",");
-        Serial.print(roop_count);
-        Serial.print(",");
-        Serial.print(try_count);
-        Serial.print(",");
-        Serial.print(g_function[0]);
-        Serial.print(",");
-        Serial.print(POT_realized[0]);
-        Serial.print(",");
-        Serial.print(z1[0]);
-        Serial.print(",");
-        Serial.print(derivatives[0]);
-        Serial.print(",");
-        Serial.print(z2[0]);
-        Serial.print(",");
-        Serial.print(z3[0]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][0]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][0]);
-        Serial.print(",");
-        Serial.print(outputADRC[0]);
-        Serial.print(",");
-        Serial.println(POT_desired[0]);
+        SerialPrint_function();
 
         //  ループ数を計算
         roop_count += 1;
@@ -537,32 +500,8 @@ void thread_callback() {
 
     //  シリアルモニタに表示
     if(lookup_direction == 2){
-      /**/
-      Serial.print(lookup_direction);
-      Serial.print(",");
-      Serial.print(roop_count);
-      Serial.print(",");
-      Serial.print(try_count);
-      Serial.print(",");
-      Serial.print(g_function[0]);
-      Serial.print(",");
-      Serial.print(POT_realized[0]);
-      Serial.print(",");
-      Serial.print(z1[0]);
-      Serial.print(",");
-      Serial.print(derivatives[0]);
-      Serial.print(",");
-      Serial.print(z2[0]);
-      Serial.print(",");
-      Serial.print(z3[0]);
-      Serial.print(",");
-      Serial.print(lookup_table0[roop_count][0]);
-      Serial.print(",");
-      Serial.print(lookup_table1[roop_count][0]);
-      Serial.print(",");
-      Serial.print(outputADRC[0]);
-      Serial.print(",");
-      Serial.println(POT_desired[0]);
+      //  シリアルモニタに表示
+      SerialPrint_function();
     }
 
 
@@ -654,9 +593,9 @@ void ESO(int index, int roop){
 
   //  角速度の推定
   if(lookup_direction == 0){
-    dz2[index] = z3[index] + lookup_table0[roop][index] + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
+    dz2[index] = z3[index] - (input_coef[index] * lookup_table0[roop][index]) + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index] + (input_coef[index] * lookup_table0[roop][index]);
   }else if(lookup_direction == 1){
-    dz2[index] = z3[index] + lookup_table1[roop][index] + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
+    dz2[index] = z3[index] - (input_coef[index] * lookup_table1[roop][index]) + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index] + (input_coef[index] * lookup_table1[roop][index]);
   }else{
     dz2[index] = z3[index] + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
   }
@@ -680,18 +619,20 @@ void ADRC(int index, int roop){
   errors[index] = (float)POT_desired[index] - z1[index];
 
   //  ADRC計算
+  outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
+
   if(lookup_direction == 0){
-    outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index] - lookup_table0[roop][index]) / input_coef[index];
+    outputADRC_sum[index] = outputADRC[index] + lookup_table0[roop][index];
 
   }else if(lookup_direction == 1){
-    outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index] - lookup_table1[roop][index]) / input_coef[index];
+    outputADRC_sum[index] = outputADRC[index] + lookup_table1[roop][index];
 
   }else{
-    outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
+    outputADRC_sum[index] = outputADRC[index];
   }
 
   //  アンドロイドのアクチュエータの要件（ポテンショメータの正方向と入力の正方向を一致させる）
-  outputADRC_direct[index] = outputADRC[index] * direction[index];
+  outputADRC_direct[index] = outputADRC_sum[index] * direction[index];
 
   //  VEAB1とVEAB2に与えるPWMの値を計算し格納
   Result veab = calculate_veab_Values(outputADRC_direct[index], index);
@@ -731,10 +672,9 @@ Result calculate_veab_Values(float outputADRC_derect, int i) {
 
 //  ルックアップテーブル更新
 void update_lookup_table(int index, int roop){
-  g_function[index] = alpha + (1-alpha)*exp(-pow(z3[index]/epsilon, 2));
 
   if(lookup_direction == 0){
-    lookup_table0[roop][index] = lookup_table0[roop][index] * g_function[index] + (1-alpha) * z3[index];
+    lookup_table0[roop][index] = lookup_table0[roop][index] + alpha * outputADRC[index];
 
     //  RCローパスフィルタ適用(ルックアップテーブル)
     for(int i = 0; i < 6; i++){
@@ -753,7 +693,7 @@ void update_lookup_table(int index, int roop){
     }
 
   }else{
-    lookup_table1[roop][index] = lookup_table1[roop][index] * g_function[index] + (1-alpha) * z3[index];
+    lookup_table1[roop][index] = lookup_table1[roop][index] + alpha * outputADRC[index];
 
     //  RCローパスフィルタ適用(ルックアップテーブル)
     for(int i = 0; i < 6; i++){
@@ -854,6 +794,37 @@ Result_LPF Moving_LPF() {
   lpf.POT5 = POT[5];
 
   return lpf;
+}
+
+//  シリアルモニタ関数
+void SerialPrint_function(){
+  /**/
+  Serial.print(lookup_direction);
+  Serial.print(",");
+  Serial.print(roop_count);
+  Serial.print(",");
+  Serial.print(try_count);
+  Serial.print(",");
+  Serial.print(POT_realized[0]);
+  Serial.print(",");
+  Serial.print(z1[0]);
+  Serial.print(",");
+  Serial.print(derivatives[0]);
+  Serial.print(",");
+  Serial.print(z2[0]);
+  Serial.print(",");
+  Serial.print(z3[0]);
+  Serial.print(",");
+  Serial.print(lookup_table0[roop_count][0]);
+  Serial.print(",");
+  Serial.print(lookup_table1[roop_count][0]);
+  Serial.print(",");
+  Serial.print(outputADRC[0]);
+  Serial.print(",");
+  Serial.print(outputADRC_sum[0]);
+  Serial.print(",");
+  Serial.println(POT_desired[0]);
+
 }
 
 //=============================================================================================================================================

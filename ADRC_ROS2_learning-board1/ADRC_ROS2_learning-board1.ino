@@ -11,7 +11,7 @@
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
 #define TEENSY_IP 192, 168, 1, 116 // IP that the teensy 4.1 will have
-#define AGENT_IP 192, 168, 1, 201 // IP where a micro-ros agent waits
+#define AGENT_IP 192, 168, 1, 167 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_float/sub"
@@ -114,7 +114,7 @@ volatile uint16_t POT_desired[6] = {
   258, 300, 390, 500, 600, 500
 };*/
 
-/*No2*/
+/*No2, No3*/
 volatile uint16_t POT_desired[6] = {
   260, 400, 180, 500, 600, 500
 };
@@ -128,12 +128,20 @@ const float kd[6] = {
   85.0, 180.0, 200.0, 40.0, 120.0, 20.0
 };*/
 
-/*//  PDゲイン（単自由度）No2(2025/02/26)*/
+/*//  PDゲイン（単自由度）No2(2025/02/26)
 const float kp[6] = {
   1200.0, 1000.0, 2000.0, 400.0, 2000.0, 600.0
 };
 const float kd[6] = {
   65.0, 75.0, 220.0, 65.0, 120.0, 30.0
+};*/
+
+/*//  PDゲイン（単自由度）No3(2025/03/31)*/
+const float kp[6] = {
+  2000.0, 3000.0, 9000.0, 17000.0, 7000.0, 18000.0
+};
+const float kd[6] = {
+  70.0, 120.0, 700.0, 2000.0, 400.0, 300.0
 };
 
 /*  PDゲイン（複数自由度）
@@ -171,7 +179,11 @@ float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  制御入力の係数
-float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};
+/*No1,No2
+float input_coef[6] = {10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0};*/
+
+/*No3*/
+float input_coef[6] = {5500.0, 8000.0, 20000.0, 70000.0, 20000.0, 40000.0};
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, -1, -1};
@@ -209,27 +221,27 @@ int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 //--RCフィルタ--------------------------------------------------------------------
 //  ローパスフィルタの係数　係数a=1/(2*pi*fc*dt + 1)   fc[Hz]:カットオフ周波数、dt[s]:サンプリング周期
 //  カットオフ周波数:Hz, サンプリング周期:で設定
-const float coef_lpf_veab = 0.0;   //  VEAB(カットオフ周波数150Hz)
+const float coef_lpf_veab = 0.0;   //  VEAB(カットオフ周波数 Hz)
 const float coef_lpf_omega = 0.52;  //  角速度(カットオフ周波数150Hz)
-const float coef_lpf_lookuptable = 0.95;  //  ルックアップテーブル(カットオフ周波数2Hz)
+const float coef_lpf_lookuptable = 0.0;  //  ルックアップテーブル(カットオフ周波数 Hz)
 
 //  ローパスフィルタの値保持変数
 int veab_filter[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};       //  VEAB
 float omega_filter[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};           //  角速度
-float lookuptable0_filter[2000][6] = {0};                               //  ルックアップテーブル
-float lookuptable1_filter[2000][6] = {0};                               //  ルックアップテーブル
+float lookuptable0_filter[2000][6] = {0};                         //  ルックアップテーブル
+float lookuptable1_filter[2000][6] = {0};                         //  ルックアップテーブル
 
 //  ローパスフィルタ用前回の値保持変数
 int previous_value_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};       //  VEAB
 float previous_value_omega[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};           //  角速度
-float previous_value_lookuptable0[2000][6] = {0};                               //  ルックアップテーブル
-float previous_value_lookuptable1[2000][6] = {0};                               //  ルックアップテーブル
+float previous_value_lookuptable0[2000][6] = {0};                         //  ルックアップテーブル
+float previous_value_lookuptable1[2000][6] = {0};                         //  ルックアップテーブル
 
 //  ローパスフィルタ用初回判定
 int initial_lpf_veab[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  // VEAB
 int initial_lpf_omega[6] = {0, 0, 0, 0, 0, 0};                    //  角速度
-DMAMEM int initial_lpf_lookuptable0[2000][6] = {0};                            //  ルックアップテーブル
-DMAMEM int initial_lpf_lookuptable1[2000][6] = {0};                            //  ルックアップテーブル
+DMAMEM int initial_lpf_lookuptable0[2000][6] = {0};               //  ルックアップテーブル
+DMAMEM int initial_lpf_lookuptable1[2000][6] = {0};               //  ルックアップテーブル
 
 //--移動平均法--------------------------------------------------------------------
 //  ローパスフィルタ適用POT値格納構造体
@@ -278,10 +290,11 @@ float derivatives[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float lookup_table0[gyou][retsu];
 float lookup_table1[gyou][retsu];
 
+//  学習トルクとADRCトルクの足算値
+float outputADRC_sum[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
 //  更新パラメータ
-int epsilon = 50;
-float alpha = 0.9;
-float g_function[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+float alpha = 0.01;
 
 //  学習ループ数
 int roop_count = 0;
@@ -302,7 +315,7 @@ volatile uint16_t POT_desired0[6] = {
 
 //  試行回数
 int try_count = 0;
-int try_max = 200;
+int try_max = 100;
 
 //=============================================================================================================================================
 
@@ -440,143 +453,13 @@ void thread_callback() {
       //  試行回数以下ではルックアップテーブルを更新
       if(try_count < try_max){
 
+        //  シリアルモニタに表示
+        SerialPrint_function();
+
         //  ルックアップテーブルを更新
         for(int i = 0; i < 6; i++){
           update_lookup_table(i, roop_count);
         }
-
-        //  シリアルモニタに表示
-        /**/
-        Serial.print(lookup_direction);
-        Serial.print(",");
-        Serial.print(roop_count);
-        Serial.print(",");
-        Serial.print(try_count);
-        Serial.print(",");
-        Serial.print(g_function[0]);
-        Serial.print(",");
-        Serial.print(POT_realized[0]);
-        Serial.print(",");
-        Serial.print(z1[0]);
-        Serial.print(",");
-        Serial.print(derivatives[0]);
-        Serial.print(",");
-        Serial.print(z2[0]);
-        Serial.print(",");
-        Serial.print(z3[0]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][0]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][0]);
-        Serial.print(",");
-        Serial.print(outputADRC[0]);
-        Serial.print(",");
-        Serial.print(POT_desired[0]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[1]);
-        Serial.print(",");
-        Serial.print(POT_realized[1]);
-        Serial.print(",");
-        Serial.print(z1[1]);
-        Serial.print(",");
-        Serial.print(derivatives[1]);
-        Serial.print(",");
-        Serial.print(z2[1]);
-        Serial.print(",");
-        Serial.print(z3[1]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][1]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][1]);
-        Serial.print(",");
-        Serial.print(outputADRC[1]);
-        Serial.print(",");
-        Serial.print(POT_desired[1]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[2]);
-        Serial.print(",");
-        Serial.print(POT_realized[2]);
-        Serial.print(",");
-        Serial.print(z1[2]);
-        Serial.print(",");
-        Serial.print(derivatives[2]);
-        Serial.print(",");
-        Serial.print(z2[2]);
-        Serial.print(",");
-        Serial.print(z3[2]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][2]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][2]);
-        Serial.print(",");
-        Serial.print(outputADRC[2]);
-        Serial.print(",");
-        Serial.print(POT_desired[2]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[3]);
-        Serial.print(",");
-        Serial.print(POT_realized[3]);
-        Serial.print(",");
-        Serial.print(z1[3]);
-        Serial.print(",");
-        Serial.print(derivatives[3]);
-        Serial.print(",");
-        Serial.print(z2[3]);
-        Serial.print(",");
-        Serial.print(z3[3]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][3]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][3]);
-        Serial.print(",");
-        Serial.print(outputADRC[3]);
-        Serial.print(",");
-        Serial.print(POT_desired[3]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[4]);    
-        Serial.print(",");
-        Serial.print(POT_realized[4]);
-        Serial.print(",");
-        Serial.print(z1[4]);
-        Serial.print(",");
-        Serial.print(derivatives[4]);
-        Serial.print(",");
-        Serial.print(z2[4]);
-        Serial.print(",");
-        Serial.print(z3[4]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][4]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][4]);
-        Serial.print(",");
-        Serial.print(outputADRC[4]);
-        Serial.print(",");
-        Serial.print(POT_desired[4]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[5]); 
-        Serial.print(",");
-        Serial.print(POT_realized[5]);
-        Serial.print(",");
-        Serial.print(z1[5]);
-        Serial.print(",");
-        Serial.print(derivatives[5]);
-        Serial.print(",");
-        Serial.print(z2[5]);
-        Serial.print(",");
-        Serial.print(z3[5]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][4]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][4]);
-        Serial.print(",");
-        Serial.print(outputADRC[5]);
-        Serial.print(",");
-        Serial.println(POT_desired[5]);
 
         //  ループ数を計算
         roop_count += 1;
@@ -599,137 +482,7 @@ void thread_callback() {
         
       }else{
         //  シリアルモニタに表示
-        /**/
-        Serial.print(lookup_direction);
-        Serial.print(",");
-        Serial.print(roop_count);
-        Serial.print(",");
-        Serial.print(try_count);
-        Serial.print(",");
-        Serial.print(g_function[0]);
-        Serial.print(",");
-        Serial.print(POT_realized[0]);
-        Serial.print(",");
-        Serial.print(z1[0]);
-        Serial.print(",");
-        Serial.print(derivatives[0]);
-        Serial.print(",");
-        Serial.print(z2[0]);
-        Serial.print(",");
-        Serial.print(z3[0]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][0]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][0]);
-        Serial.print(",");
-        Serial.print(outputADRC[0]);
-        Serial.print(",");
-        Serial.print(POT_desired[0]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[1]);
-        Serial.print(",");
-        Serial.print(POT_realized[1]);
-        Serial.print(",");
-        Serial.print(z1[1]);
-        Serial.print(",");
-        Serial.print(derivatives[1]);
-        Serial.print(",");
-        Serial.print(z2[1]);
-        Serial.print(",");
-        Serial.print(z3[1]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][1]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][1]);
-        Serial.print(",");
-        Serial.print(outputADRC[1]);
-        Serial.print(",");
-        Serial.print(POT_desired[1]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[2]);
-        Serial.print(",");
-        Serial.print(POT_realized[2]);
-        Serial.print(",");
-        Serial.print(z1[2]);
-        Serial.print(",");
-        Serial.print(derivatives[2]);
-        Serial.print(",");
-        Serial.print(z2[2]);
-        Serial.print(",");
-        Serial.print(z3[2]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][2]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][2]);
-        Serial.print(",");
-        Serial.print(outputADRC[2]);
-        Serial.print(",");
-        Serial.print(POT_desired[2]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[3]);
-        Serial.print(",");
-        Serial.print(POT_realized[3]);
-        Serial.print(",");
-        Serial.print(z1[3]);
-        Serial.print(",");
-        Serial.print(derivatives[3]);
-        Serial.print(",");
-        Serial.print(z2[3]);
-        Serial.print(",");
-        Serial.print(z3[3]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][3]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][3]);
-        Serial.print(",");
-        Serial.print(outputADRC[3]);
-        Serial.print(",");
-        Serial.print(POT_desired[3]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[4]);    
-        Serial.print(",");
-        Serial.print(POT_realized[4]);
-        Serial.print(",");
-        Serial.print(z1[4]);
-        Serial.print(",");
-        Serial.print(derivatives[4]);
-        Serial.print(",");
-        Serial.print(z2[4]);
-        Serial.print(",");
-        Serial.print(z3[4]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][4]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][4]);
-        Serial.print(",");
-        Serial.print(outputADRC[4]);
-        Serial.print(",");
-        Serial.print(POT_desired[4]);
-        /**/
-        Serial.print(",");
-        Serial.print(g_function[5]); 
-        Serial.print(",");
-        Serial.print(POT_realized[5]);
-        Serial.print(",");
-        Serial.print(z1[5]);
-        Serial.print(",");
-        Serial.print(derivatives[5]);
-        Serial.print(",");
-        Serial.print(z2[5]);
-        Serial.print(",");
-        Serial.print(z3[5]);
-        Serial.print(",");
-        Serial.print(lookup_table0[roop_count][4]);
-        Serial.print(",");
-        Serial.print(lookup_table1[roop_count][4]);
-        Serial.print(",");
-        Serial.print(outputADRC[5]);
-        Serial.print(",");
-        Serial.println(POT_desired[5]);
+        SerialPrint_function();
 
         //  ループ数を計算
         roop_count += 1;
@@ -753,158 +506,28 @@ void thread_callback() {
 
     //  シリアルモニタに表示
     if(lookup_direction == 2){
-      /**/
-      Serial.print(lookup_direction);
-      Serial.print(",");
-      Serial.print(roop_count);
-      Serial.print(",");
-      Serial.print(try_count);
-      Serial.print(",");
-      Serial.print(g_function[0]);
-      Serial.print(",");
-      Serial.print(POT_realized[0]);
-      Serial.print(",");
-      Serial.print(z1[0]);
-      Serial.print(",");
-      Serial.print(derivatives[0]);
-      Serial.print(",");
-      Serial.print(z2[0]);
-      Serial.print(",");
-      Serial.print(z3[0]);
-      Serial.print(",");
-      Serial.print(lookup_table0[roop_count][0]);
-      Serial.print(",");
-      Serial.print(lookup_table1[roop_count][0]);
-      Serial.print(",");
-      Serial.print(outputADRC[0]);
-      Serial.print(",");
-      Serial.print(POT_desired[0]);
-      /**/
-      Serial.print(",");
-      Serial.print(g_function[1]);
-      Serial.print(",");
-      Serial.print(POT_realized[1]);
-      Serial.print(",");
-      Serial.print(z1[1]);
-      Serial.print(",");
-      Serial.print(derivatives[1]);
-      Serial.print(",");
-      Serial.print(z2[1]);
-      Serial.print(",");
-      Serial.print(z3[1]);
-      Serial.print(",");
-      Serial.print(lookup_table0[roop_count][1]);
-      Serial.print(",");
-      Serial.print(lookup_table1[roop_count][1]);
-      Serial.print(",");
-      Serial.print(outputADRC[1]);
-      Serial.print(",");
-      Serial.print(POT_desired[1]);
-      /**/
-      Serial.print(",");
-      Serial.print(g_function[2]);
-      Serial.print(",");
-      Serial.print(POT_realized[2]);
-      Serial.print(",");
-      Serial.print(z1[2]);
-      Serial.print(",");
-      Serial.print(derivatives[2]);
-      Serial.print(",");
-      Serial.print(z2[2]);
-      Serial.print(",");
-      Serial.print(z3[2]);
-      Serial.print(",");
-      Serial.print(lookup_table0[roop_count][2]);
-      Serial.print(",");
-      Serial.print(lookup_table1[roop_count][2]);
-      Serial.print(",");
-      Serial.print(outputADRC[2]);
-      Serial.print(",");
-      Serial.print(POT_desired[2]);
-      /**/
-      Serial.print(",");
-      Serial.print(g_function[3]);
-      Serial.print(",");
-      Serial.print(POT_realized[3]);
-      Serial.print(",");
-      Serial.print(z1[3]);
-      Serial.print(",");
-      Serial.print(derivatives[3]);
-      Serial.print(",");
-      Serial.print(z2[3]);
-      Serial.print(",");
-      Serial.print(z3[3]);
-      Serial.print(",");
-      Serial.print(lookup_table0[roop_count][3]);
-      Serial.print(",");
-      Serial.print(lookup_table1[roop_count][3]);
-      Serial.print(",");
-      Serial.print(outputADRC[3]);
-      Serial.print(",");
-      Serial.print(POT_desired[3]);
-      /**/
-      Serial.print(",");
-      Serial.print(g_function[4]);    
-      Serial.print(",");
-      Serial.print(POT_realized[4]);
-      Serial.print(",");
-      Serial.print(z1[4]);
-      Serial.print(",");
-      Serial.print(derivatives[4]);
-      Serial.print(",");
-      Serial.print(z2[4]);
-      Serial.print(",");
-      Serial.print(z3[4]);
-      Serial.print(",");
-      Serial.print(lookup_table0[roop_count][4]);
-      Serial.print(",");
-      Serial.print(lookup_table1[roop_count][4]);
-      Serial.print(",");
-      Serial.print(outputADRC[4]);
-      Serial.print(",");
-      Serial.print(POT_desired[4]);
-      /**/
-      Serial.print(",");
-      Serial.print(g_function[5]); 
-      Serial.print(",");
-      Serial.print(POT_realized[5]);
-      Serial.print(",");
-      Serial.print(z1[5]);
-      Serial.print(",");
-      Serial.print(derivatives[5]);
-      Serial.print(",");
-      Serial.print(z2[5]);
-      Serial.print(",");
-      Serial.print(z3[5]);
-      Serial.print(",");
-      Serial.print(lookup_table0[roop_count][4]);
-      Serial.print(",");
-      Serial.print(lookup_table1[roop_count][4]);
-      Serial.print(",");
-      Serial.print(outputADRC[5]);
-      Serial.print(",");
-      Serial.println(POT_desired[5]);
+      SerialPrint_function();
     }
 
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1*/
     analogWrite(aout_channels[0], VEAB_desired[0]);
     analogWrite(aout_channels[1], VEAB_desired[1]);
-    /*ピン2,3*/
+    /*ピン2,3
     analogWrite(aout_channels[2], VEAB_desired[2]);
-    analogWrite(aout_channels[3], VEAB_desired[3]);
-    /*ピン4,5*/
+    analogWrite(aout_channels[3], VEAB_desired[3]);*/
+    /*ピン4,5
     analogWrite(aout_channels[4], VEAB_desired[4]);
-    analogWrite(aout_channels[5], VEAB_desired[5]);
-    /*ピン6,7*/
+    analogWrite(aout_channels[5], VEAB_desired[5]);*/
+    /*ピン6,7
     analogWrite(aout_channels[6], VEAB_desired[6]);
-    analogWrite(aout_channels[7], VEAB_desired[7]);
-    /*ピン8,9*/
+    analogWrite(aout_channels[7], VEAB_desired[7]);*/
+    /*ピン8,9
     analogWrite(aout_channels[8], VEAB_desired[8]);
-    analogWrite(aout_channels[9], VEAB_desired[9]);
-    /*ピン28,29*/
+    analogWrite(aout_channels[9], VEAB_desired[9]);*/
+    /*ピン28,29
     analogWrite(aout_channels[10], VEAB_desired[10]);
-    analogWrite(aout_channels[11], VEAB_desired[11]);
+    analogWrite(aout_channels[11], VEAB_desired[11]);*/
 
     //====================================
     // to here
@@ -974,9 +597,9 @@ void ESO(int index, int roop){
 
   //  角速度の推定
   if(lookup_direction == 0){
-    dz2[index] = z3[index] + lookup_table0[roop][index] + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
+    dz2[index] = z3[index] - (input_coef[index] * lookup_table0[roop][index]) + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index] + (input_coef[index] * lookup_table0[roop][index]);
   }else if(lookup_direction == 1){
-    dz2[index] = z3[index] + lookup_table1[roop][index] + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
+    dz2[index] = z3[index] - (input_coef[index] * lookup_table1[roop][index]) + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index] + (input_coef[index] * lookup_table1[roop][index]);
   }else{
     dz2[index] = z3[index] + beta2[index] * ((float)POT_realized[index] - z1[index]) + input_coef[index] * outputADRC[index];
   }
@@ -1000,18 +623,20 @@ void ADRC(int index, int roop){
   errors[index] = (float)POT_desired[index] - z1[index];
 
   //  ADRC計算
+  outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
+
   if(lookup_direction == 0){
-    outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index] - lookup_table0[roop][index]) / input_coef[index];
+    outputADRC_sum[index] = outputADRC[index] + lookup_table0[roop][index];
 
   }else if(lookup_direction == 1){
-    outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index] - lookup_table1[roop][index]) / input_coef[index];
+    outputADRC_sum[index] = outputADRC[index] + lookup_table1[roop][index];
 
   }else{
-    outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
+    outputADRC_sum[index] = outputADRC[index];
   }
   
   //  アンドロイドのアクチュエータの要件（ポテンショメータの正方向と入力の正方向を一致させる）
-  outputADRC_direct[index] = outputADRC[index] * direction[index];
+  outputADRC_direct[index] = outputADRC_sum[index] * direction[index];
 
   //  VEAB1とVEAB2に与えるPWMの値を計算し格納
   Result veab = calculate_veab_Values(outputADRC_direct[index], index);
@@ -1024,8 +649,8 @@ void ADRC(int index, int roop){
 Result calculate_veab_Values(float outputADRC_derect, int i) {
   Result result;
   if(i == 0){
-    result.veab_value1 = 143 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 113 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 141 + (outputADRC_derect / 2.0);  
+    result.veab_value2 = 115 - (outputADRC_derect / 2.0);
   } else if(i == 1){
     result.veab_value1 = 126 + (outputADRC_derect / 2.0);  
     result.veab_value2 = 130 - (outputADRC_derect / 2.0);
@@ -1051,10 +676,9 @@ Result calculate_veab_Values(float outputADRC_derect, int i) {
 
 //  ルックアップテーブル更新
 void update_lookup_table(int index, int roop){
-  g_function[index] = alpha + (1-alpha)*exp(-pow(z3[index]/epsilon, 2));
 
   if(lookup_direction == 0){
-    lookup_table0[roop][index] = lookup_table0[roop][index] * g_function[index] + (1-alpha) * z3[index];
+    lookup_table0[roop][index] = lookup_table0[roop][index] + alpha * outputADRC[index];
 
     //  RCローパスフィルタ適用(ルックアップテーブル)
     for(int i = 0; i < 6; i++){
@@ -1073,7 +697,7 @@ void update_lookup_table(int index, int roop){
     }
 
   }else{
-    lookup_table1[roop][index] = lookup_table1[roop][index] * g_function[index] + (1-alpha) * z3[index];
+    lookup_table1[roop][index] = lookup_table1[roop][index] + alpha * outputADRC[index];
 
     //  RCローパスフィルタ適用(ルックアップテーブル)
     for(int i = 0; i < 6; i++){
@@ -1174,6 +798,142 @@ Result_LPF Moving_LPF() {
   lpf.POT5 = POT[5];
 
   return lpf;
+}
+
+//  シリアルモニタ関数
+void SerialPrint_function(){
+  /**/
+  Serial.print(lookup_direction);
+  Serial.print(",");
+  Serial.print(roop_count);
+  Serial.print(",");
+  Serial.print(try_count);
+  Serial.print(",");
+  Serial.print(POT_realized[0]);
+  Serial.print(",");
+  Serial.print(z1[0]);
+  Serial.print(",");
+  Serial.print(derivatives[0]);
+  Serial.print(",");
+  Serial.print(z2[0]);
+  Serial.print(",");
+  Serial.print(z3[0]);
+  Serial.print(",");
+  Serial.print(lookup_table0[roop_count][0]);
+  Serial.print(",");
+  Serial.print(lookup_table1[roop_count][0]);
+  Serial.print(",");
+  Serial.print(outputADRC[0]);
+  Serial.print(",");
+  Serial.print(outputADRC_sum[0]);
+  Serial.print(",");
+  Serial.print(POT_desired[0]);
+  /**/
+  Serial.print(",");
+  Serial.print(POT_realized[1]);
+  Serial.print(",");
+  Serial.print(z1[1]);
+  Serial.print(",");
+  Serial.print(derivatives[1]);
+  Serial.print(",");
+  Serial.print(z2[1]);
+  Serial.print(",");
+  Serial.print(z3[1]);
+  Serial.print(",");
+  Serial.print(lookup_table0[roop_count][1]);
+  Serial.print(",");
+  Serial.print(lookup_table1[roop_count][1]);
+  Serial.print(",");
+  Serial.print(outputADRC[1]);
+  Serial.print(",");
+  Serial.print(outputADRC_sum[1]);
+  Serial.print(",");
+  Serial.print(POT_desired[1]);
+  /**/
+  Serial.print(",");
+  Serial.print(POT_realized[2]);
+  Serial.print(",");
+  Serial.print(z1[2]);
+  Serial.print(",");
+  Serial.print(derivatives[2]);
+  Serial.print(",");
+  Serial.print(z2[2]);
+  Serial.print(",");
+  Serial.print(z3[2]);
+  Serial.print(",");
+  Serial.print(lookup_table0[roop_count][2]);
+  Serial.print(",");
+  Serial.print(lookup_table1[roop_count][2]);
+  Serial.print(",");
+  Serial.print(outputADRC[2]);
+  Serial.print(",");
+  Serial.print(outputADRC_sum[2]);
+  Serial.print(",");
+  Serial.print(POT_desired[2]);
+  /**/
+  Serial.print(",");
+  Serial.print(POT_realized[3]);
+  Serial.print(",");
+  Serial.print(z1[3]);
+  Serial.print(",");
+  Serial.print(derivatives[3]);
+  Serial.print(",");
+  Serial.print(z2[3]);
+  Serial.print(",");
+  Serial.print(z3[3]);
+  Serial.print(",");
+  Serial.print(lookup_table0[roop_count][3]);
+  Serial.print(",");
+  Serial.print(lookup_table1[roop_count][3]);
+  Serial.print(",");
+  Serial.print(outputADRC[3]);
+  Serial.print(",");
+  Serial.print(outputADRC_sum[3]);
+  Serial.print(",");
+  Serial.print(POT_desired[3]);
+  /**/
+  Serial.print(",");
+  Serial.print(POT_realized[4]);
+  Serial.print(",");
+  Serial.print(z1[4]);
+  Serial.print(",");
+  Serial.print(derivatives[4]);
+  Serial.print(",");
+  Serial.print(z2[4]);
+  Serial.print(",");
+  Serial.print(z3[4]);
+  Serial.print(",");
+  Serial.print(lookup_table0[roop_count][4]);
+  Serial.print(",");
+  Serial.print(lookup_table1[roop_count][4]);
+  Serial.print(",");
+  Serial.print(outputADRC[4]);
+  Serial.print(",");
+  Serial.print(outputADRC_sum[4]);
+  Serial.print(",");
+  Serial.print(POT_desired[4]);
+  /**/
+  Serial.print(",");
+  Serial.print(POT_realized[5]);
+  Serial.print(",");
+  Serial.print(z1[5]);
+  Serial.print(",");
+  Serial.print(derivatives[5]);
+  Serial.print(",");
+  Serial.print(z2[5]);
+  Serial.print(",");
+  Serial.print(z3[5]);
+  Serial.print(",");
+  Serial.print(lookup_table0[roop_count][4]);
+  Serial.print(",");
+  Serial.print(lookup_table1[roop_count][4]);
+  Serial.print(",");
+  Serial.print(outputADRC[5]);
+  Serial.print(",");
+  Serial.print(outputADRC_sum[5]);
+  Serial.print(",");
+  Serial.println(POT_desired[5]);
+
 }
 
 //=============================================================================================================================================
@@ -1308,8 +1068,8 @@ void setup() {
 
   //  VEABの初期化
   /*ピン0,1*/
-  analogWrite(aout_channels[0], 143);
-  analogWrite(aout_channels[1], 113);
+  analogWrite(aout_channels[0], 141);
+  analogWrite(aout_channels[1], 115);
   /*ピン2,3*/
   analogWrite(aout_channels[2], 126);
   analogWrite(aout_channels[3], 130);

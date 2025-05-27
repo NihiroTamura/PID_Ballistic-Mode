@@ -278,7 +278,7 @@ int sub_count = 0;
 CircularBuffer<int, 5> omegaBuffers[6];
 
 //  サンプリング間隔hを格納
-float h = 0.001;   //  初期値を設定（秒単位）
+float h = 0.0001;   //  初期値を設定（秒単位）
 
 //  角速度値
 float derivatives[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};

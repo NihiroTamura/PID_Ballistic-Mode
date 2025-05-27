@@ -278,7 +278,7 @@ int sub_count = 0;
 CircularBuffer<int, 5> omegaBuffers[6];
 
 //  サンプリング間隔hを格納
-float h = 0.0001;   //  初期値を設定（秒単位）
+float h = 0.001;   //  初期値を設定（秒単位）
 
 //  角速度値
 float derivatives[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -294,7 +294,7 @@ float lookup_table1[gyou][retsu];
 float outputADRC_sum[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  更新パラメータ
-float alpha = 0.01;
+float alpha = 0.001;
 
 //  学習ループ数
 int roop_count = 0;

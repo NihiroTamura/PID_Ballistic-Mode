@@ -11,7 +11,7 @@
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
 #define TEENSY_IP 192, 168, 1, 116 // IP that the teensy 4.1 will have
-#define AGENT_IP 192, 168, 1, 167 // IP where a micro-ros agent waits
+#define AGENT_IP 192, 168, 1, 90 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_float/sub"
@@ -808,6 +808,7 @@ void SerialPrint_function(){
   Serial.print(roop_count);
   Serial.print(",");
   Serial.print(try_count);
+  /**/
   Serial.print(",");
   Serial.print(POT_realized[0]);
   Serial.print(",");
@@ -924,9 +925,9 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(z3[5]);
   Serial.print(",");
-  Serial.print(lookup_table0[roop_count][4]);
+  Serial.print(lookup_table0[roop_count][5]);
   Serial.print(",");
-  Serial.print(lookup_table1[roop_count][4]);
+  Serial.print(lookup_table1[roop_count][5]);
   Serial.print(",");
   Serial.print(outputADRC[5]);
   Serial.print(",");

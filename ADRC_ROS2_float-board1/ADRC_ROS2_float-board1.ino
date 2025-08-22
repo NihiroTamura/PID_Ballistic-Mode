@@ -11,7 +11,7 @@
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
 #define TEENSY_IP 192, 168, 1, 116 // IP that the teensy 4.1 will have
-#define AGENT_IP 192, 168, 1, 3 // IP where a micro-ros agent waits
+#define AGENT_IP 192, 168, 1, 93 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_float/sub"

@@ -11,7 +11,7 @@
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
 #define TEENSY_IP 192, 168, 1, 116 // IP that the teensy 4.1 will have
-#define AGENT_IP 192, 168, 1, 93 // IP where a micro-ros agent waits
+#define AGENT_IP 192, 168, 1, 29 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_float/sub"
@@ -113,7 +113,7 @@ volatile uint16_t POT_desired[6] = {
 };
 
 //---ADRC--------------------------------------------------------------------
-/*//  PDゲイン（単自由度）No4(2025/07/01)*/
+/*//  PDゲイン（単自由度）No1(2025/07/01)*/
 const float kp[6] = {
   2500.0, 4000.0, 9000.0, 1400.0, 7000.0, 18000.0
 };
@@ -123,10 +123,10 @@ const float kd[6] = {
 
 /*//  PDゲイン（単自由度）調整用
 const float kp[6] = {
-  1250.0, 2000.0, 4500.0, 700.0, 3500.0, 9000.0
+  2500.0, 4000.0, 9000.0, 1400.0, 7000.0, 18000.0
 };
 const float kd[6] = {
-  100.0, 200.0, 700.0, 110.0, 400.0, 300.0
+  50.0, 100.0, 350.0, 55.0, 200.0, 150.0
 };*/
 
 //  オブザーバゲイン
@@ -180,10 +180,6 @@ float outputADRC_direct[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  ADRC PWM値
 int ADRC_PWM[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
-//  初回のESO用時間変数
-int T_start = 0;
-int T_stop = 0;
 
 //  初回のESO用
 int eso_count = 0;
@@ -279,6 +275,13 @@ void error_loop(){
 void thread_callback() {
   while(1) {
     int t0 = millis();
+
+    //  周期確認用
+    /*
+    unsigned long now = micros();
+    static unsigned long last = 0;
+
+    Serial.println(now - last);*/
 
     //====================================
     // write codes from here
@@ -421,6 +424,9 @@ void thread_callback() {
       //  the designated period is violated
       error_loop();
     }
+
+    //  周期確認用
+    //last = now;
 
   }
 }

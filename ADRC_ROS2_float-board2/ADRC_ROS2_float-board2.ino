@@ -11,7 +11,7 @@
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
 #define TEENSY_IP 192, 168, 1, 117 // IP that the teensy 4.1 will have
-#define AGENT_IP 192, 168, 1, 93 // IP where a micro-ros agent waits
+#define AGENT_IP 192, 168, 1, 29 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_float/sub"
@@ -123,10 +123,10 @@ const float kd[6] = {
 
 /*  PDゲイン（単自由度）調整用
 const float kp[6] = {
-  5000.0, 0.0, 0.0, 0.0, 0.0, 0.0
+  10000.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 const float kd[6] = {
-  250.0, 0.0, 0.0, 0.0, 0.0, 0.0
+  125.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };*/
 
 //  オブザーバゲイン
@@ -180,10 +180,6 @@ float outputADRC_direct[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  ADRC PWM値
 int ADRC_PWM[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
-//  初回のESO用時間変数
-int T_start = 0;
-int T_stop = 0;
 
 //  初回のESO用
 int eso_count = 0;
@@ -279,6 +275,13 @@ void error_loop(){
 void thread_callback() {
   while(1) {
     int t0 = millis();
+
+    //  周期確認用
+    /*
+    unsigned long now = micros();
+    static unsigned long last = 0;
+
+    Serial.println(now - last);*/
 
     //====================================
     // write codes from here
@@ -421,6 +424,9 @@ void thread_callback() {
       //  the designated period is violated
       error_loop();
     }
+
+    //  周期確認用
+    //last = now;
 
   }
 }

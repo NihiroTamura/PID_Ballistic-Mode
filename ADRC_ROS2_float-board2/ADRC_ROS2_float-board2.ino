@@ -388,7 +388,7 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
-    //SerialPrint_function();
+    SerialPrint_function();
 
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1*/

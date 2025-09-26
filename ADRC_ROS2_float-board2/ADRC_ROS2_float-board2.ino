@@ -107,8 +107,13 @@ volatile float pub[PUBLISH];
 volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  目標値の初期値{親指側縮1-640伸, 0, 0, 0, 0, 0}
-/*No1*/
+/*No1
 volatile uint16_t POT_desired[6] = {
+  500, 0, 0, 0, 0, 0
+};*/
+
+/*No1*/
+volatile float POT_desired[6] = {
   500, 0, 0, 0, 0, 0
 };
 

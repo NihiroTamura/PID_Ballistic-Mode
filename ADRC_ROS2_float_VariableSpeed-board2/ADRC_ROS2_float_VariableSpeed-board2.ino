@@ -580,7 +580,7 @@ void checkfunction(int index){
 
   if(Speed_check[index] == 1){
     //  判定
-    if (check_value[index] < 7){
+    if (check_value[index] < range_check[index]){
       Speed_check[index] = 0;
       SPEED_desired[index] = 1.0;
     }

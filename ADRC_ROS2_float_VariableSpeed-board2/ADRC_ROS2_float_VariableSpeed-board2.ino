@@ -275,6 +275,9 @@ int Speed_check[6] = {0, 0, 0, 0, 0, 0};
 //  1ループ前目標値
 float POT_desired_previous[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
+//  目標値までの閾値
+float range_check[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
 //=============================================================================================================================================
 
 //------関数の定義--------------------------------------------------------------------
@@ -560,6 +563,10 @@ void checkfunction(int index){
   if(abs(POT_desired[index] - POT_desired_previous[index]) > 0){
     if(sub_count == 1){
       Speed_check[index] = 1;
+
+      //  目標値までの閾値計算
+      range_check[index] = abs(POT_desired[index] - POT_desired_previous[index]) * 0.1;
+
     }else{
       Speed_check[index] = 0;
     }

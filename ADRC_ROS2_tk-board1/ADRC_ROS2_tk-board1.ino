@@ -90,7 +90,7 @@ const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 
 //------オブジェクトの定義--------------------------------------------------------------------
 //  使用するROS2メッセージの型
-std_msgs__msg__Float32MultiArray msg_pub;
+std_msgs__msg__UInt16MultiArray msg_pub;
 std_msgs__msg__Float32MultiArray msg_sub;
 
 //  ROS2のオブジェクトの定義
@@ -109,7 +109,7 @@ rcl_timer_t timer;
 volatile float sub[SUBSCRIBE];
 
 //  publishメッセージの配列
-volatile float pub[PUBLISH];
+volatile uint16_t pub[PUBLISH];
 
 //  POT値
 volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -347,17 +347,17 @@ void thread_callback() {
       
       //  publishメッセージの配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
-        pub[i] = POT_realized[i];
+        pub[i] = (uint16_t)round(POT_realized[i]);
       }
 
       /*  publishメッセージの配列に微分値(絶対値)を格納
       for (int i = 0; i < OMEGA; i++){
-        pub[i+6] = abs(derivatives[i]);
+        pub[i+6] = (uint16_t)round(abs(derivatives[i]));
       }*/
 
       /*  publishメッセージの配列に目標値を格納*/
       for (int i = 0; i < POT_DESIRED; i++){
-        pub[i+6] = POT_desired[i];
+        pub[i+6] = (uint16_t)round(POT_desired[i]);
       }
 
     }
@@ -794,7 +794,7 @@ void setup() {
   //  メッセージ変数msg_pubに対して、メモリの確保と初期化
   msg_pub.data.capacity = PUBLISH; //  data配列の最大要素数=メッセージの要素数
   msg_pub.data.size = 0;  //　メッセージ送信時のデータの初期化の保証
-  msg_pub.data.data = (float*)malloc(msg_pub.data.capacity * sizeof(float));  //　data配列に必要なメモリを動的に確保
+  msg_pub.data.data = (uint16_t*)malloc(msg_pub.data.capacity * sizeof(uint16_t));  //　data配列に必要なメモリを動的に確保
   msg_pub.layout.dim.capacity = 1;  //  1-dimentional array: vector（次元の数）
   msg_pub.layout.dim.size = 0;  //  配列の次元情報を初期化
   msg_pub.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg_pub.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension)); //  MultiArrayDimension のためのメモリを確保
@@ -826,7 +826,7 @@ void setup() {
   msg_pub.layout.dim.data[0].stride = PUBLISH; //　publishするメッセージの更新ストライドを設定
   //  メッセージ変数を初期化
   for (size_t i = 0; i < PUBLISH; i++) {
-    pub[i] = 0.0; //  pub配列（publishメッセージの値）の初期化
+    pub[i] = 0; //  pub配列（publishメッセージの値）の初期化
     msg_pub.data.data[i] = pub[i];  //  メッセージのデータ部分に初期化された値を格納
   }
   for (size_t i = 0; i < SUBSCRIBE; i++) {
@@ -861,7 +861,7 @@ void setup() {
   RCCHECK(rclc_publisher_init_default(
     &publisher, //  publisherの構造体を指定
     &node,  //  publisherが関連付けられるノードを指定
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/UInt16MultiArray 型)
     PUB_TOPICNAME));  //  publishするトピックの名前
 
   //------create timer（timerを利用して定期的に実行するtimer_callback関数を設定）--------------------------------------------------------------------

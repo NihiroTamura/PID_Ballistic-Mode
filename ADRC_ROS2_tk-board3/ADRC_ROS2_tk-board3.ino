@@ -501,7 +501,7 @@ void ESO(int index){
 void ADRC(int index){
 
   //  誤差計算
-  errors[index] = (float)POT_desired[index] - z1[index];
+  errors[index] = POT_desired[index] - z1[index];
 
   //  ADRC計算
   outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];

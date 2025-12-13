@@ -131,10 +131,10 @@ const float kd[6] = {
 
 /*//  PDゲイン（単自由度）調整用
 const float kp[6] = {
-  9000.0, 9000.0, 6000.0, 6000.0, 0.0, 0.0
+  9000.0, 1800.0, 6000.0, 6000.0, 0.0, 0.0
 };
 const float kd[6] = {
-  300.0, 500.0, 300.0, 450.0, 0.0, 0.0
+  300.0, 90.0, 300.0, 450.0, 0.0, 0.0
 };*/
 
 //  オブザーバゲイン
@@ -143,7 +143,7 @@ const float kd[6] = {
 float lamda_0[6] = {300.0, 700.0, 300.0, 300.0, 0.0, 0.0};
 
 /*調整用
-float lamda_0[6] = {300.0, 700.0, 300.0, 300.0, 0.0, 0.0};*/
+float lamda_0[6] = {300.0, 600.0, 300.0, 300.0, 0.0, 0.0};*/
 
 //  ゲイン
 const float beta1[6] = {
@@ -172,7 +172,7 @@ float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float input_coef[6] = {30000.0, 200000.0, 30000.0, 30000.0, 0.0, 0.0};
 
 /*調整用
-float input_coef[6] = {30000.0, 200000.0, 30000.0, 30000.0, 0.0, 0.0};*/
+float input_coef[6] = {30000.0, 20000.0, 30000.0, 30000.0, 0.0, 0.0};*/
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {1, 1, -1, -1, 0, 0};
@@ -501,7 +501,7 @@ void ESO(int index){
 void ADRC(int index){
 
   //  誤差計算
-  errors[index] = (float)POT_desired[index] - z1[index];
+  errors[index] = POT_desired[index] - z1[index];
 
   //  ADRC計算
   outputADRC[index] = (-z3[index] + kp[index] * errors[index] - kd[index] * z2[index]) / input_coef[index];
@@ -895,7 +895,7 @@ void setup() {
   analogWrite(aout_channels[6], 128);
   analogWrite(aout_channels[7], 128);
   /*ピン8,9
-  analogWrite(aout_channels[8], 100);
+  analogWrite(aout_channels[8], 0);
   //analogWrite(aout_channels[9], 128);*/
   /*ピン28,29
   analogWrite(aout_channels[10], 255);

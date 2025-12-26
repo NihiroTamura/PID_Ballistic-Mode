@@ -117,16 +117,16 @@ volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 //  目標値の初期値
 /*No1*/
 volatile float POT_desired[6] = {
-  200.0, 500.0, 350.0, 180.0, 600.0, 500.0
+  200.0, 500.0, 350.0, 220.0, 350.0, 500.0
 };
 
 //---ADRC--------------------------------------------------------------------
 /*//  PDゲイン（単自由度）No1(2025/12/08)*/
 const float kp[6] = {
-  9000.0, 9000.0, 6000.0, 6000.0, 0.0, 0.0
+  9000.0, 9000.0, 6000.0, 6000.0, 2000.0, 5000.0
 };
 const float kd[6] = {
-  300.0, 500.0, 300.0, 450.0, 0.0, 0.0
+  300.0, 500.0, 300.0, 450.0, 140.0, 200.0
 };
 
 /*//  PDゲイン（単自由度）調整用
@@ -140,7 +140,7 @@ const float kd[6] = {
 //  オブザーバゲイン
 //  オブザーバーの極(-λ₀の重根) 
 /*No1*/
-float lamda_0[6] = {300.0, 700.0, 300.0, 300.0, 0.0, 0.0};
+float lamda_0[6] = {300.0, 700.0, 300.0, 300.0, 300.0, 300.0};
 
 /*調整用
 float lamda_0[6] = {300.0, 600.0, 300.0, 300.0, 0.0, 0.0};*/
@@ -169,13 +169,13 @@ float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  制御入力係数
 /*No1*/
-float input_coef[6] = {30000.0, 200000.0, 30000.0, 30000.0, 0.0, 0.0};
+float input_coef[6] = {30000.0, 200000.0, 30000.0, 30000.0, 20000.0, 30000.0};
 
 /*調整用
 float input_coef[6] = {30000.0, 20000.0, 30000.0, 30000.0, 0.0, 0.0};*/
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
-const int direction[6] = {1, 1, -1, -1, 0, 0};
+const int direction[6] = {1, 1, -1, -1, 1, 1};
 
 //  各要素(自由度)の誤差
 float errors[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -396,7 +396,7 @@ void thread_callback() {
     }
 
     //  シリアルモニタに表示
-    SerialPrint_function();
+    //SerialPrint_function();
 
     //------VEABへ出力--------------------------------------------------------------------
     /*ピン0,1*/
@@ -533,7 +533,9 @@ Result calculate_veab_Values(float outputADRC_derect, int i) {
     result.veab_value2 = 128 - (outputADRC_derect / 2.0);
   } else if(i == 4){
     result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value2 = 128;
+    //result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
+    //result.veab_value2 = 128 - (outputADRC_derect / 2.0);
   } else{
     result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
     result.veab_value2 = 128 - (outputADRC_derect / 2.0);
@@ -894,12 +896,12 @@ void setup() {
   /*ピン6,7*/
   analogWrite(aout_channels[6], 128);
   analogWrite(aout_channels[7], 128);
-  /*ピン8,9
-  analogWrite(aout_channels[8], 0);
-  //analogWrite(aout_channels[9], 128);*/
-  /*ピン28,29
-  analogWrite(aout_channels[10], 255);
-  analogWrite(aout_channels[11], 0);*/
+  /*ピン8,9*/
+  analogWrite(aout_channels[8], 128);
+  //analogWrite(aout_channels[9], 128);
+  /*ピン28,29*/
+  analogWrite(aout_channels[10], 128);
+  analogWrite(aout_channels[11], 128);
 
   delay(5000);
 

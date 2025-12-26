@@ -131,10 +131,10 @@ const float kd[6] = {
 
 /*//  PDゲイン（単自由度）調整用
 const float kp[6] = {
-  10000.0, 8000.0, 8500.0, 2000.0, 6000.0, 0.0
+  10000.0, 8000.0, 8500.0, 1300.0, 6000.0, 0.0
 };
 const float kd[6] = {
-  230.0, 250.0, 230.0, 100.0, 280.0, 0.0
+  230.0, 250.0, 230.0, 157.0, 280.0, 0.0
 };*/
 
 //  オブザーバゲイン
@@ -143,7 +143,7 @@ const float kd[6] = {
 float lamda_0[6] = {300.0, 300.0, 500.0, 800.0, 500.0, 0.0};
 
 /*調整用
-float lamda_0[6] = {300.0, 300.0, 500.0, 800.0, 500.0, 0.0};*/
+float lamda_0[6] = {300.0, 300.0, 500.0, 700.0, 500.0, 0.0};*/
 
 //  ゲイン
 const float beta1[6] = {
@@ -172,7 +172,7 @@ float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float input_coef[6] = {40000.0, 40000.0, 50000.0, 40000.0, 50000.0, 0.0};
 
 /*調整用
-float input_coef[6] = {40000.0, 40000.0, 50000.0, 40000.0, 50000.0, 0.0};*/
+float input_coef[6] = {40000.0, 40000.0, 50000.0, 60000.0, 50000.0, 0.0};*/
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
 const int direction[6] = {-1, -1, 1, -1, 1, 0};
@@ -628,7 +628,7 @@ Result_LPF Moving_LPF() {
 
 //  シリアルモニタ関数
 void SerialPrint_function(){
-  /**/
+  /*
   Serial.print(POT_realized[0]);
   Serial.print(",");
   Serial.print(z1[0]);
@@ -647,8 +647,8 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(outputADRC[0]);
   Serial.print(",");
-  Serial.print(POT_desired[0]);
-  /**/
+  Serial.print(POT_desired[0]);*/
+  /*
   Serial.print(",");
   Serial.print(POT_realized[1]);
   Serial.print(",");
@@ -668,8 +668,8 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(outputADRC[1]);
   Serial.print(",");
-  Serial.print(POT_desired[1]);
-  /**/
+  Serial.print(POT_desired[1]);*/
+  /*
   Serial.print(",");
   Serial.print(POT_realized[2]);
   Serial.print(",");
@@ -689,9 +689,9 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(outputADRC[2]);
   Serial.print(",");
-  Serial.print(POT_desired[2]);
-  /**/
-  Serial.print(",");
+  Serial.print(POT_desired[2]);*/
+  /*
+  Serial.print(",");*/
   Serial.print(POT_realized[3]);
   Serial.print(",");
   Serial.print(z1[3]);

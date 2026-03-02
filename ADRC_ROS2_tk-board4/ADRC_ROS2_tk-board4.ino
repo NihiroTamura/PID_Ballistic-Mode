@@ -18,7 +18,7 @@
 #define LED 13
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
-#define TEENSY_IP 192, 168, 1, 119 // IP that the teensy 4.1 will have ※teensyのIPは192.168.[0-3].[0-255]
+#define TEENSY_IP 192, 168, 1, 104 // IP that the teensy 4.1 will have ※teensyのIPは192.168.[0-3].[0-255]
 #define AGENT_IP 192, 168, 1, 217 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
@@ -111,17 +111,22 @@ volatile float sub[SUBSCRIBE];
 //  publishメッセージの配列
 volatile uint16_t pub[PUBLISH];
 
-//  POT値
+//  POT値(POT No.[33, 32, 31, 30, 23, -])
 volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-//  目標値の初期値
+//  目標値の初期値(POT No.[33, 32, 31, 30, 23, -])
 /*No1*/
 volatile float POT_desired[6] = {
   350.0, 420.0, 400.0, 160.0, 370.0, 0.0
 };
 
+/*調整用
+volatile float POT_desired[6] = {
+  500.0, 300.0, 170.0, 300.0, 280.0, 420.0
+};*/
+
 //---ADRC--------------------------------------------------------------------
-/*//  PDゲイン（単自由度）No1(2025/12/08)*/
+/*//  PDゲイン(POT No.[33, 32, 31, 30, 23, -]) No1(2025/12/08)*/
 const float kp[6] = {
   10000.0, 8000.0, 8500.0, 2000.0, 6000.0, 0.0
 };
@@ -129,7 +134,7 @@ const float kd[6] = {
   230.0, 250.0, 230.0, 100.0, 280.0, 0.0
 };
 
-/*//  PDゲイン（単自由度）調整用
+/*//  PDゲイン調整用
 const float kp[6] = {
   10000.0, 8000.0, 8500.0, 1300.0, 6000.0, 0.0
 };
@@ -138,7 +143,7 @@ const float kd[6] = {
 };*/
 
 //  オブザーバゲイン
-//  オブザーバーの極(-λ₀の重根) 
+//  オブザーバーの極(-λ₀の重根)(POT No.[33, 32, 31, 30, 23, -])
 /*No1*/
 float lamda_0[6] = {300.0, 300.0, 500.0, 800.0, 500.0, 0.0};
 
@@ -168,6 +173,7 @@ float dz3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float z3[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //  制御入力係数
+//  (POT No.[33, 32, 31, 30, 23, -])
 /*No1*/
 float input_coef[6] = {40000.0, 40000.0, 50000.0, 40000.0, 50000.0, 0.0};
 
@@ -175,6 +181,7 @@ float input_coef[6] = {40000.0, 40000.0, 50000.0, 40000.0, 50000.0, 0.0};
 float input_coef[6] = {40000.0, 40000.0, 50000.0, 60000.0, 50000.0, 0.0};*/
 
 //  各自由度ごとの圧力の正方向とポテンショメータの正方向の対応を整理
+//  (POT No.[33, 32, 31, 30, 23, -])
 const int direction[6] = {-1, -1, 1, -1, 1, 0};
 
 //  各要素(自由度)の誤差
@@ -199,7 +206,7 @@ struct Result {
   float veab_value2;
 };
 
-//  VEABへのPWM出力値
+//  VEABへのPWM出力値(POT No.[33a, 33b, 32a, 32b, 31a, 31b, 30a, 30b, 23a, 23b, -, -])
 int VEAB_desired[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 //---ローパスフィルタ--------------------------------------------------------------------
@@ -517,26 +524,26 @@ void ADRC(int index){
 }
 
 //  VEAB1とVEAB2に与えるPWMの値の計算関数(アクチュエータの両ポートの圧力が釣り合うPWN値を基準に足し引きを行う)
-Result calculate_veab_Values(float outputADRC_derect, int i) {
+Result calculate_veab_Values(float outputADRC_direct, int i) {
   Result result;
   if(i == 0){
-    result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 128 + (outputADRC_direct / 2.0);  
+    result.veab_value2 = 128 - (outputADRC_direct / 2.0);
   } else if(i == 1){
-    result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 128 + (outputADRC_direct / 2.0);  
+    result.veab_value2 = 128 - (outputADRC_direct / 2.0);
   } else if(i == 2){
-    result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 128 + (outputADRC_direct / 2.0);  
+    result.veab_value2 = 128 - (outputADRC_direct / 2.0);
   } else if(i == 3){
-    result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 128 + (outputADRC_direct / 2.0);  
+    result.veab_value2 = 128 - (outputADRC_direct / 2.0);
   } else if(i == 4){
-    result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 128 + (outputADRC_direct / 2.0);  
+    result.veab_value2 = 128 - (outputADRC_direct / 2.0);
   } else{
-    result.veab_value1 = 128 + (outputADRC_derect / 2.0);  
-    result.veab_value2 = 128 - (outputADRC_derect / 2.0);
+    result.veab_value1 = 128 + (outputADRC_direct / 2.0);  
+    result.veab_value2 = 128 - (outputADRC_direct / 2.0);
   }
 
   result.veab_value1 = max(0, min(255, int(result.veab_value1)));
@@ -628,7 +635,7 @@ Result_LPF Moving_LPF() {
 
 //  シリアルモニタ関数
 void SerialPrint_function(){
-  /*
+  /**/
   Serial.print(POT_realized[0]);
   Serial.print(",");
   Serial.print(z1[0]);
@@ -647,8 +654,8 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(outputADRC[0]);
   Serial.print(",");
-  Serial.print(POT_desired[0]);*/
-  /*
+  Serial.print(POT_desired[0]);
+  /**/
   Serial.print(",");
   Serial.print(POT_realized[1]);
   Serial.print(",");
@@ -668,8 +675,8 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(outputADRC[1]);
   Serial.print(",");
-  Serial.print(POT_desired[1]);*/
-  /*
+  Serial.print(POT_desired[1]);
+  /**/
   Serial.print(",");
   Serial.print(POT_realized[2]);
   Serial.print(",");
@@ -689,9 +696,9 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(outputADRC[2]);
   Serial.print(",");
-  Serial.print(POT_desired[2]);*/
-  /*
-  Serial.print(",");*/
+  Serial.print(POT_desired[2]);
+  /**/
+  Serial.print(",");
   Serial.print(POT_realized[3]);
   Serial.print(",");
   Serial.print(z1[3]);
@@ -767,7 +774,7 @@ void setup() {
   IPAddress agent_ip(AGENT_IP);   //  micro-ROS エージェントの IP アドレスを設定
 
   //   Teensyをmicro-ROSエージェントに接続するためのEthernet UDP設定(引数：MACアドレス, TeensyのIP, micro-ROSエージェントのIP, ポート番号)
-  set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9998);
+  set_microros_native_ethernet_udp_transports(teensy_mac, teensy_ip, agent_ip, 9994);
 
   //  シリアル通信を初期化する。ボーレートは9600bps（デバック時に用いる。シリアルモニタを開いてから書き込みを行う）
   //Serial.begin(9600);

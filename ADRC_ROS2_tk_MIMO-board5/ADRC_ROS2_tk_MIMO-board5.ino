@@ -184,7 +184,7 @@ struct SparseElement {
 //--PD制御入力値関連--------------------------------------------------------------------
 //  (POT No.[20, 19, 18, 17, -, -])
 //(P) -Pゲイン（各自由度　最大6要素）--------------------------------------------------------------------
-//  自由度1
+/*//  自由度1*/
 SparseElement kp_11[] = { {0, 0, 4000.0} };
 //  自由度2
 SparseElement kp_12[] = { {1, 1, 19000.0} };
@@ -199,21 +199,21 @@ SparseElement kp_16[] = { {5, 5, 0.0} };
 
 /*調整用
 //  自由度1
-SparseElement kp_11[] = { {0, 0, 4000.0} };
+SparseElement kp_11[] = { {0, 0, 2800.0} };
 //  自由度2
-SparseElement kp_12[] = { {1, 1, 19000.0} };
+SparseElement kp_12[] = { {1, 1, 13300.0} };
 //  自由度3
-SparseElement kp_13[] = { {2, 2, 8000.0} };
+SparseElement kp_13[] = { {2, 2, 5600.0} };
 //  自由度4
-SparseElement kp_14[] = { {3, 3, 4000.0} };
+SparseElement kp_14[] = { {3, 3, 2800.0} };
 //  自由度5
 SparseElement kp_15[] = { {4, 4, 0.0} };
 //  自由度6
-SparseElement kp_16[] = { {5, 5, 0.0} };
-*/
+SparseElement kp_16[] = { {5, 5, 0.0} };*/
+
 
 //(P) -Dゲイン（各自由度　最大6要素）--------------------------------------------------------------------
-//  自由度1
+/*//  自由度1*/
 SparseElement kd_11[] = { {0, 0, 150.0} };
 //  自由度2
 SparseElement kd_12[] = { {1, 1, 240.0} };
@@ -228,18 +228,18 @@ SparseElement kd_16[] = { {5, 5, 0.0} };
 
 /*調整用
 //  自由度1
-SparseElement kd_11[] = { {0, 0, 150.0} };
+SparseElement kd_11[] = { {0, 0, 105.0} };
 //  自由度2
-SparseElement kd_12[] = { {1, 1, 240.0} };
+SparseElement kd_12[] = { {1, 1, 168.0} };
 //  自由度3
-SparseElement kd_13[] = { {2, 2, 200.0} };
+SparseElement kd_13[] = { {2, 2, 140.0} };
 //  自由度4
-SparseElement kd_14[] = { {3, 3, 50.0} };
+SparseElement kd_14[] = { {3, 3, 35.0} };
 //  自由度5
 SparseElement kd_15[] = { {4, 4, 0.0} };
 //  自由度6
-SparseElement kd_16[] = { {5, 5, 0.0} };
-*/
+SparseElement kd_16[] = { {5, 5, 0.0} };*/
+
 
 //  PDゲインの構造体のポインタ
 const SparseElement* kp_rows[] = {

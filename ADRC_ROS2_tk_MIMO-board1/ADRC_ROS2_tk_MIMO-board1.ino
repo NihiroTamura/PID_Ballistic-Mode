@@ -445,8 +445,8 @@ SparseElementBeta beta34[] = { {3, 3, &beta3[3]} };
 //  自由度5
 SparseElementBeta beta35[] = { {4, 4, &beta3[4]} };
 //  自由度6
-SparseElementBeta beta36[] = { {5, 5, &beta3[5]} };
-*/
+SparseElementBeta beta36[] = { {5, 5, &beta3[5]} };*/
+
 
 //  オブザーバーゲインの構造体のポインタ
 SparseElementBeta* beta_rows[] = {

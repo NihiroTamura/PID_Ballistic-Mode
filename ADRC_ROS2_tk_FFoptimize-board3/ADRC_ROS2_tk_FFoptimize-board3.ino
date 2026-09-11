@@ -1,17 +1,17 @@
 //===調整必要パラメータ(P)===
 /*
-1. 目標値の初期値(初期位置の指定) POT_desired[]:136行目
-2. アクチュエータと制御入力の正負方向対応係数 direction[]:153行目
-3. PDゲイン: kp_??[], kd_??[]:191~202行目(Pゲイン), 205~216行目(Dゲイン)
-※PDゲインの構造体が持つ要素数 kp_row_sizes[], kd_row_sizes[]:229行目(Pゲイン), 233行目(Dゲイン)
-4. 制御入力係数 input_coef_??[]:239~250行目
-※制御入力係数の構造体が持つ要素数 input_coef_row_sizes[]:259行目
-5. z3外乱値係数 z3_??[]:265~276行目
-※z3外乱値係数の構造体が持つ要素数 z3_row_sizes[]:285行目
-6. オブザーバーゲインの極 lamda_0:296行目
-7. 非対角要素のオブザーバーゲイン beta1?[], beta2?[], beta3?[]:306~317行目(beta1?[]), 320~331行目(beta2?[]), 334~345行目(beta3?[])
-※オブザーバーゲインの構造体が持つ要素数 beta_row_sizes[]:356~358行目
-8. calculate_veab_Values関数のPWM基準値 result.veab_value? = "〇"± (outputADRC_direct / 2.0):787~814行目
+1. 目標値の初期値(初期位置の指定) POT_desired[]:142行目
+2. アクチュエータと制御入力の正負方向対応係数 direction[]:159行目
+3. PDゲイン: kp_??[], kd_??[]:197~207行目(Pゲイン), 211~222行目(Dゲイン)
+※PDゲインの構造体が持つ要素数 kp_row_sizes[], kd_row_sizes[]:235行目(Pゲイン), 239行目(Dゲイン)
+4. 制御入力係数 input_coef_??[]:245~256行目
+※制御入力係数の構造体が持つ要素数 input_coef_row_sizes[]:265行目
+5. z3外乱値係数 z3_??[]:271~282行目
+※z3外乱値係数の構造体が持つ要素数 z3_row_sizes[]:291行目
+6. オブザーバーゲインの極 lamda_0:302行目
+7. 非対角要素のオブザーバーゲイン beta1?[], beta2?[], beta3?[]:312~323行目(beta1?[]), 326~337行目(beta2?[]), 340~351行目(beta3?[])
+※オブザーバーゲインの構造体が持つ要素数 beta_row_sizes[]:362~364行目
+8. calculate_veab_Values関数のPWM基準値 result.veab_value? = "〇"± (outputADRC_direct / 2.0):806~832行目
 */
 //=============================================================================================================================================
 //------周期--------------------------------------------------------------------
@@ -32,6 +32,8 @@
 #define SUB_TOPICNAME "/board_android_float/sub"
 #define SUB_TOPICNAME2 "/board3_FFparam_float/sub"
 #define PUB_TOPICNAME "/board3_tk/pub"
+#define PUB_TOPICNAME2 "/board3_tk_PWM_float/pub"
+#define PUB_TOPICNAME3 "/board3_tk_z3_float/pub"
 
 //------目標値の個数--------------------------------------------------------------------
 #define POT_DESIRED 6
@@ -44,6 +46,8 @@
 
 //------Publishするデータの個数--------------------------------------------------------------------
 #define PUBLISH 6 + POT_DESIRED //  ANALOG_IN_CH + POT_DESIRED
+#define PUBLISH2 6 //  自由度分の制御入力の数
+#define PUBLISH3 6 //  自由度分の外乱の数
 
 //------Subscribeするデータの個数--------------------------------------------------------------------
 #define SUBSCRIBE 6 + 20 + PARAMETER //  POT_DESIRED + 7~26自由度目の目標値 + PARAMETER
@@ -87,6 +91,7 @@ const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 //  使用するメッセージの型のライブラリ
 #include <std_msgs/msg/u_int16_multi_array.h>
 #include <std_msgs/msg/float32_multi_array.h>
+#include <std_msgs/msg/int16_multi_array.h>
 #include <std_msgs/msg/multi_array_dimension.h>
 #include <std_msgs/msg/multi_array_layout.h>
 
@@ -100,6 +105,8 @@ const int aout_channels[ANALOG_OUT_CH] = {0,1,2,3,4,5,6,7,8,9,28,29};
 //------オブジェクトの定義--------------------------------------------------------------------
 //  使用するROS2メッセージの型
 std_msgs__msg__UInt16MultiArray msg_pub;
+std_msgs__msg__Float32MultiArray msg_pub2;
+std_msgs__msg__Float32MultiArray msg_pub3;
 std_msgs__msg__Float32MultiArray msg_sub;
 std_msgs__msg__Float32MultiArray msg_sub2;
 
@@ -107,6 +114,8 @@ std_msgs__msg__Float32MultiArray msg_sub2;
 rcl_subscription_t subscriber;
 rcl_subscription_t subscriber2;
 rcl_publisher_t publisher;
+rcl_publisher_t publisher2;
+rcl_publisher_t publisher3;
 rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
@@ -126,6 +135,8 @@ volatile float sub2[SUBSCRIBE2];
 
 //  publishメッセージの配列
 volatile uint16_t pub[PUBLISH];
+volatile float pub2[PUBLISH2];
+volatile float pub3[PUBLISH3];
 
 //  POT値(POT No.[47, 46, 45, 33, 32, 31])
 volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -239,7 +250,7 @@ int kd_row_sizes[6] = {
 //  自由度1
 SparseElement input_coef_11[] = { {0, 0, 40000.0} };
 //  自由度2
-SparseElement input_coef_12[] = { {1, 1, 40000.0} };
+SparseElement input_coef_12[] = { {1, 1, 54000.0} };
 //  自由度3
 SparseElement input_coef_13[] = { {2, 2, 30000.0} };
 //  自由度4
@@ -363,7 +374,7 @@ int beta_row_sizes[18] = {
 float t_start[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //　1つ前の目標値
-float Previous_POT_desired[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+float Previous_POT_desired[6] = {-1.0, -1.0, -1.0, -1.0, -1.0, -1.0};
 
 //  目標値の一時保存
 float tmp_POT_desired[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -561,6 +572,16 @@ void thread_callback() {
         pub[i+6] = (uint16_t)round(POT_desired[i]);
       }
 
+      /*  publishメッセージの配列にVEABを格納*/
+      for (int i = 0; i < PUBLISH2; i++){
+        pub2[i] = outputADRC[i] + outputAdd[i];
+      }
+
+      /*  publishメッセージの配列にz3を格納*/
+      for (int i = 0; i < PUBLISH3; i++){
+        pub3[i] = z3[i];
+      }
+
     }
 
     //  拡張状態オブザーバの計算
@@ -653,6 +674,20 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     }
     //  メッセージをトピックに送信
     RCSOFTCHECK(rcl_publish(&publisher, &msg_pub, NULL));
+
+    //  Publlishするメッセージmsg_pub2に格納
+    for (size_t i = 0; i < PUBLISH2; i++) {
+      msg_pub2.data.data[i] = pub2[i];
+    }
+    //  メッセージをトピックに送信
+    RCSOFTCHECK(rcl_publish(&publisher2, &msg_pub2, NULL));
+
+    //  Publlishするメッセージmsg_pub3に格納
+    for (size_t i = 0; i < PUBLISH3; i++) {
+      msg_pub3.data.data[i] = pub3[i];
+    }
+    //  メッセージをトピックに送信
+    RCSOFTCHECK(rcl_publish(&publisher3, &msg_pub3, NULL));
   }
 }
 
@@ -839,8 +874,18 @@ void AddInput(int index) {
   // --- FF制御入力 ---
   outputAdd[index] = FF_param_a[index] * timeFF * timeFF * timeFF * timeFF * timeFF + FF_param_b[index] * timeFF * timeFF * timeFF * timeFF + FF_param_c[index] * timeFF * timeFF * timeFF + FF_param_d[index] * timeFF * timeFF + FF_param_e[index] *timeFF;
 
+  //  FF時間終了
   if(timeFF == FF_time[index]){
+    //  入力0
     outputAdd[index] = 0;
+
+    //  FFパラメータを初期化
+    FF_param_a[index] = 0.0;
+    FF_param_b[index] = 0.0;
+    FF_param_c[index] = 0.0;
+    FF_param_d[index] = 0.0;
+    FF_param_e[index] = 0.0;
+    FF_time[index] = 0.0;
   }
 
 }
@@ -849,7 +894,7 @@ void AddInput(int index) {
 void POT_desired_change(int index) {
 
   //　初回の目標値を保存
-  if(Previous_POT_desired[index] == 0) {
+  if(Previous_POT_desired[index] == -1.0) {
     Previous_POT_desired[index] = POT_desired[index];
     tmp_POT_desired[index] = POT_desired[index];
   }
@@ -953,6 +998,20 @@ void SerialPrint_function(){
   /**/
   Serial.print(POT_realized[0]);
   Serial.print(",");
+  Serial.print(z1[0]);
+  Serial.print(",");
+  Serial.print(dz1[0]);
+  Serial.print(",");
+  Serial.print(derivatives[0]);
+  Serial.print(",");
+  Serial.print(z2[0]);
+  Serial.print(",");
+  Serial.print(dz2[0]);
+  Serial.print(",");
+  Serial.print(z3[0]);
+  Serial.print(",");
+  Serial.print(dz3[0]);
+  Serial.print(",");
   Serial.print(FF_param_a[0]);
   Serial.print(",");
   Serial.print(FF_param_b[0]);
@@ -975,6 +1034,20 @@ void SerialPrint_function(){
   /**/
   Serial.print(",");
   Serial.print(POT_realized[1]);
+  Serial.print(",");
+  Serial.print(z1[1]);
+  Serial.print(",");
+  Serial.print(dz1[1]);
+  Serial.print(",");
+  Serial.print(derivatives[1]);
+  Serial.print(",");
+  Serial.print(z2[1]);
+  Serial.print(",");
+  Serial.print(dz2[1]);
+  Serial.print(",");
+  Serial.print(z3[1]);
+  Serial.print(",");
+  Serial.print(dz3[1]);
   Serial.print(",");
   Serial.print(FF_param_a[1]);
   Serial.print(",");
@@ -999,6 +1072,20 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(POT_realized[2]);
   Serial.print(",");
+  Serial.print(z1[2]);
+  Serial.print(",");
+  Serial.print(dz1[2]);
+  Serial.print(",");
+  Serial.print(derivatives[2]);
+  Serial.print(",");
+  Serial.print(z2[2]);
+  Serial.print(",");
+  Serial.print(dz2[2]);
+  Serial.print(",");
+  Serial.print(z3[2]);
+  Serial.print(",");
+  Serial.print(dz3[2]);
+  Serial.print(",");
   Serial.print(FF_param_a[2]);
   Serial.print(",");
   Serial.print(FF_param_b[2]);
@@ -1021,6 +1108,20 @@ void SerialPrint_function(){
   /**/
   Serial.print(",");
   Serial.print(POT_realized[3]);
+  Serial.print(",");
+  Serial.print(z1[3]);
+  Serial.print(",");
+  Serial.print(dz1[3]);
+  Serial.print(",");
+  Serial.print(derivatives[3]);
+  Serial.print(",");
+  Serial.print(z2[3]);
+  Serial.print(",");
+  Serial.print(dz2[3]);
+  Serial.print(",");
+  Serial.print(z3[3]);
+  Serial.print(",");
+  Serial.print(dz3[3]);
   Serial.print(",");
   Serial.print(FF_param_a[3]);
   Serial.print(",");
@@ -1045,6 +1146,20 @@ void SerialPrint_function(){
   Serial.print(",");
   Serial.print(POT_realized[4]);
   Serial.print(",");
+  Serial.print(z1[4]);
+  Serial.print(",");
+  Serial.print(dz1[4]);
+  Serial.print(",");
+  Serial.print(derivatives[4]);
+  Serial.print(",");
+  Serial.print(z2[4]);
+  Serial.print(",");
+  Serial.print(dz2[4]);
+  Serial.print(",");
+  Serial.print(z3[4]);
+  Serial.print(",");
+  Serial.print(dz3[4]);
+  Serial.print(",");
   Serial.print(FF_param_a[4]);
   Serial.print(",");
   Serial.print(FF_param_b[4]);
@@ -1067,6 +1182,20 @@ void SerialPrint_function(){
   /**/
   Serial.print(",");
   Serial.print(POT_realized[5]);
+  Serial.print(",");
+  Serial.print(z1[5]);
+  Serial.print(",");
+  Serial.print(dz1[5]);
+  Serial.print(",");
+  Serial.print(derivatives[5]);
+  Serial.print(",");
+  Serial.print(z2[5]);
+  Serial.print(",");
+  Serial.print(dz2[5]);
+  Serial.print(",");
+  Serial.print(z3[5]);
+  Serial.print(",");
+  Serial.print(dz3[5]);
   Serial.print(",");
   Serial.print(FF_param_a[5]);
   Serial.print(",");
@@ -1138,6 +1267,32 @@ void setup() {
     msg_pub.layout.dim.data[i].label.size = 0;
     msg_pub.layout.dim.data[i].label.data = (char*) malloc(msg_pub.layout.dim.data[i].label.capacity * sizeof(char));
   }
+
+  //  メッセージ変数msg_pub2に対して、メモリの確保と初期化
+  msg_pub2.data.capacity = PUBLISH2; //  data配列の最大要素数=メッセージの要素数
+  msg_pub2.data.size = 0;  //　メッセージ送信時のデータの初期化の保証
+  msg_pub2.data.data = (float*)malloc(msg_pub2.data.capacity * sizeof(float));  //　data配列に必要なメモリを動的に確保
+  msg_pub2.layout.dim.capacity = 1;  //  1-dimentional array: vector（次元の数）
+  msg_pub2.layout.dim.size = 0;  //  配列の次元情報を初期化
+  msg_pub2.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg_pub2.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension)); //  MultiArrayDimension のためのメモリを確保
+  for(size_t i = 0; i < msg_pub2.layout.dim.capacity; i++){  //  ラベルフィールドの設定(コピペ)
+    msg_pub2.layout.dim.data[i].label.capacity = 20;
+    msg_pub2.layout.dim.data[i].label.size = 0;
+    msg_pub2.layout.dim.data[i].label.data = (char*) malloc(msg_pub2.layout.dim.data[i].label.capacity * sizeof(char));
+  }
+
+  //  メッセージ変数msg_pub3に対して、メモリの確保と初期化
+  msg_pub3.data.capacity = PUBLISH3; //  data配列の最大要素数=メッセージの要素数
+  msg_pub3.data.size = 0;  //　メッセージ送信時のデータの初期化の保証
+  msg_pub3.data.data = (float*)malloc(msg_pub3.data.capacity * sizeof(float));  //　data配列に必要なメモリを動的に確保
+  msg_pub3.layout.dim.capacity = 1;  //  1-dimentional array: vector（次元の数）
+  msg_pub3.layout.dim.size = 0;  //  配列の次元情報を初期化
+  msg_pub3.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg_pub3.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension)); //  MultiArrayDimension のためのメモリを確保
+  for(size_t i = 0; i < msg_pub3.layout.dim.capacity; i++){  //  ラベルフィールドの設定(コピペ)
+    msg_pub3.layout.dim.data[i].label.capacity = 20;
+    msg_pub3.layout.dim.data[i].label.size = 0;
+    msg_pub3.layout.dim.data[i].label.data = (char*) malloc(msg_pub3.layout.dim.data[i].label.capacity * sizeof(char));
+  }
   
   //  メッセージ変数msg_subに対して、メモリの確保と初期化
   msg_sub.data.capacity = SUBSCRIBE;  //  data配列の最大要素数=メッセージの要素数
@@ -1167,15 +1322,36 @@ void setup() {
 
   //------initialize message variables--------------------------------------------------------------------
   //  2.メッセージ変数の設定段階（送信可能な状態に設定）
+  // msg_pub
   msg_pub.data.size = PUBLISH; //  メッセージの要素数を設定（データの実際の使用サイズ）
   msg_pub.layout.dim.size = 1;  //  メッセージのデータの次元数を設定(ex, 1 = 1次元の配列(ベクトル))
   msg_pub.layout.dim.data[0].label.size = strlen(msg_pub.layout.dim.data[0].label.data);  //labelの長さを設定
   msg_pub.layout.dim.data[0].size = PUBLISH; //  publishするメッセージの次元のサイズを設定
   msg_pub.layout.dim.data[0].stride = PUBLISH; //　publishするメッセージの更新ストライドを設定
+  //msg_pub2
+  msg_pub2.data.size = PUBLISH2; //  メッセージの要素数を設定（データの実際の使用サイズ）
+  msg_pub2.layout.dim.size = 1;  //  メッセージのデータの次元数を設定(ex, 1 = 1次元の配列(ベクトル))
+  msg_pub2.layout.dim.data[0].label.size = strlen(msg_pub2.layout.dim.data[0].label.data);  //labelの長さを設定
+  msg_pub2.layout.dim.data[0].size = PUBLISH2; //  publishするメッセージの次元のサイズを設定
+  msg_pub2.layout.dim.data[0].stride = PUBLISH2; //　publishするメッセージの更新ストライドを設定
+  //msg_pub3
+  msg_pub3.data.size = PUBLISH3; //  メッセージの要素数を設定（データの実際の使用サイズ）
+  msg_pub3.layout.dim.size = 1;  //  メッセージのデータの次元数を設定(ex, 1 = 1次元の配列(ベクトル))
+  msg_pub3.layout.dim.data[0].label.size = strlen(msg_pub3.layout.dim.data[0].label.data);  //labelの長さを設定
+  msg_pub3.layout.dim.data[0].size = PUBLISH3; //  publishするメッセージの次元のサイズを設定
+  msg_pub3.layout.dim.data[0].stride = PUBLISH3; //　publishするメッセージの更新ストライドを設定
   //  メッセージ変数を初期化
   for (size_t i = 0; i < PUBLISH; i++) {
     pub[i] = 0; //  pub配列（publishメッセージの値）の初期化
     msg_pub.data.data[i] = pub[i];  //  メッセージのデータ部分に初期化された値を格納
+  }
+  for (size_t i = 0; i < PUBLISH2; i++) {
+    pub2[i] = 0; //  pub配列（publishメッセージの値）の初期化
+    msg_pub2.data.data[i] = pub2[i];  //  メッセージのデータ部分に初期化された値を格納
+  }
+  for (size_t i = 0; i < PUBLISH3; i++) {
+    pub3[i] = 0; //  pub配列（publishメッセージの値）の初期化
+    msg_pub3.data.data[i] = pub3[i];  //  メッセージのデータ部分に初期化された値を格納
   }
   for (size_t i = 0; i < SUBSCRIBE; i++) {
     msg_sub.data.data[i] = 255.0; //  sub配列（subscribeメッセージの値）の初期化
@@ -1228,6 +1404,18 @@ void setup() {
     &node,  //  publisherが関連付けられるノードを指定
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/UInt16MultiArray 型)
     PUB_TOPICNAME));  //  publishするトピックの名前
+
+  RCCHECK(rclc_publisher_init_default(
+    &publisher2, //  publisher2の構造体を指定
+    &node,  //  publisher2が関連付けられるノードを指定
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    PUB_TOPICNAME2));  //  publishするトピックの名前
+  
+  RCCHECK(rclc_publisher_init_default(
+    &publisher3, //  publisher3の構造体を指定
+    &node,  //  publisher3が関連付けられるノードを指定
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    PUB_TOPICNAME3));  //  publishするトピックの名前
 
   //------create timer（timerを利用して定期的に実行するtimer_callback関数を設定）--------------------------------------------------------------------
   const unsigned int timer_timeout = PUB_PERIOD_MS;

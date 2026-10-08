@@ -144,7 +144,7 @@ volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 //(P)  目標値の初期値(POT No.[47, 46, 45, 33, 32, 31])
 /*No1*/
 volatile float POT_desired[6] = {
-  300.0, 250.0, 400.0, 350.0, 420.0, 400.0
+  300.0, 200.0, 400.0, 350.0, 420.0, 400.0
 };
 
 //---ADRC--------------------------------------------------------------------
@@ -202,7 +202,7 @@ struct SparseElement {
 /*//  自由度1*/
 SparseElement kp_11[] = { {0, 0, 10000.0} };
 //  自由度2
-SparseElement kp_12[] = { {1, 1, 10000.0} };
+SparseElement kp_12[] = { {1, 1, 8000.0} };
 //  自由度3
 SparseElement kp_13[] = { {2, 2, 8000.0} };
 //  自由度4
@@ -216,7 +216,7 @@ SparseElement kp_16[] = { {5, 5, 8500.0} };
 /*//  自由度1*/
 SparseElement kd_11[] = { {0, 0, 230.0} };
 //  自由度2
-SparseElement kd_12[] = { {1, 1, 230.0} };
+SparseElement kd_12[] = { {1, 1, 250.0} };
 //  自由度3
 SparseElement kd_13[] = { {2, 2, 400.0} };
 //  自由度4
@@ -250,7 +250,7 @@ int kd_row_sizes[6] = {
 //  自由度1
 SparseElement input_coef_11[] = { {0, 0, 40000.0} };
 //  自由度2
-SparseElement input_coef_12[] = { {1, 1, 54000.0} };
+SparseElement input_coef_12[] = { {1, 1, 60000.0} };
 //  自由度3
 SparseElement input_coef_13[] = { {2, 2, 30000.0} };
 //  自由度4

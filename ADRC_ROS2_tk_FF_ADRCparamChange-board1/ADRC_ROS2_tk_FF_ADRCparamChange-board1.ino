@@ -12,13 +12,31 @@
 7. 非対角要素のオブザーバーゲイン beta1?[], beta2?[], beta3?[]:312~323行目(beta1?[]), 326~337行目(beta2?[]), 340~351行目(beta3?[])
 ※オブザーバーゲインの構造体が持つ要素数 beta_row_sizes[]:362~364行目
 8. calculate_veab_Values関数のPWM基準値 result.veab_value? = "〇"± (outputADRC_direct / 2.0):806~832行目
+*/
+//=============================================================================================================================================
 
-※ 3.PDゲイン, 4.制御入力係数, 6.オブザーバーゲインの極 は
-   トピック SUB_TOPICNAME3 ("/board1_ADRCparam_float/sub", Float32MultiArray, 24要素) から
-   実行中に上書きできる（GUI: test_code6.py の「ADRCパラメータ」タブ）。
-   並び: [0-5]:kp, [6-11]:kd, [12-17]:input_coef, [18-23]:lamda_0
-   負の値を入れた要素は「変更しない」の意味になり、上記の.ino設定値がそのまま使われる。
-   (input_coefのみADRC計算式の分母になるため 0以下 が「変更しない」扱い)
+//===ADRCパラメータの変更・状態量のpublish（GUI_android_tk_ADRCparamChg.py / GUI_android_tk.py 用）===
+/*
+・kp, kd, input_coef, lamda_0 を実行中に GUI から変更できる
+    受信: SUB_TOPICNAME3 (Float32MultiArray, 25要素)
+      [0]           : seq（送信番号。1以上の整数。GUIが応答の確認に使う）
+      [1+4*i+0..3]  : 自由度 i（board内の番号 0~5）の kp, kd, input_coef, lamda_0
+      NaN の要素は「変更しない」。1つでも不正な要素（要素数の違い・inf・範囲外・パラメータを変更できない自由度への値）
+      があればメッセージ全体を反映しない（一部だけ反映することはしない）。範囲は KP_MIN~LAMDA_0_MAX を参照。
+      反映は制御スレッドの周期の先頭で、自由度ごとに4つまとめて行う（lamda_0 を変えたらオブザーバーゲインを再計算）。
+      ESOの状態が NaN/inf になっている自由度（input_coef=0 で動かしていた自由度）は、反映時にESOの状態を初期化する。
+      反映した値は .ino を書き換えないので、Teensy を再起動すると .ino の初期値に戻る。通信が切れても最後に反映した値のまま。
+・設定中のパラメータを publish
+    送信: PUB_TOPICNAME7 (Float32MultiArray, 50要素, 200msごと + 受信を処理した直後)
+      [0]            : 最後に処理した seq（起動後に未受信なら0）
+      [1]            : 結果（1:反映した, 0:起動後未受信, -1:要素数が違う, -2:seqが不正, -3:inf, -4:範囲外, -5:変更できない自由度への値）
+      [2+4*i+0..3]   : 自由度 i の現在の kp, kd, input_coef, lamda_0
+      [26+4*i+0..3]  : 自由度 i の .ino の初期値（起動時の値）
+      パラメータを変更できない自由度（i >= ADRC_PARAM_DOF）は NaN
+・状態量を publish（PUB_PERIOD_MS ごと, Float32MultiArray, 6要素。要素 i = board内の自由度 i で、PUB_TOPICNAME3(z3) と同じ並び）
+    PUB_TOPICNAME4: z1（角度の推定値）
+    PUB_TOPICNAME5: derivatives（角速度。RCローパスフィルタ後の値）
+    PUB_TOPICNAME6: z2（角速度の推定値）
 */
 //=============================================================================================================================================
 //------周期--------------------------------------------------------------------
@@ -32,16 +50,20 @@
 #define LED 13
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
-#define TEENSY_IP 192, 168, 1, 151 // IP that the teensy 4.1 will have ※teensyのIPは192.168.[0-3].[0-255]
+#define TEENSY_IP 192, 168, 1, 131 // IP that the teensy 4.1 will have ※teensyのIPは192.168.[0-3].[0-255]
 #define AGENT_IP 192, 168, 1, 217 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
 #define SUB_TOPICNAME "/board_android_float/sub"
 #define SUB_TOPICNAME2 "/board1_FFparam_float/sub"
-#define SUB_TOPICNAME3 "/board1_ADRCparam_float/sub"
 #define PUB_TOPICNAME "/board1_tk/pub"
 #define PUB_TOPICNAME2 "/board1_tk_PWM_float/pub"
 #define PUB_TOPICNAME3 "/board1_tk_z3_float/pub"
+#define SUB_TOPICNAME3 "/board1_tk_ADRCparam_float/sub"
+#define PUB_TOPICNAME4 "/board1_tk_z1_float/pub"
+#define PUB_TOPICNAME5 "/board1_tk_derivatives_float/pub"
+#define PUB_TOPICNAME6 "/board1_tk_z2_float/pub"
+#define PUB_TOPICNAME7 "/board1_tk_ADRCparam_float/pub"
 
 //------目標値の個数--------------------------------------------------------------------
 #define POT_DESIRED 6
@@ -56,11 +78,33 @@
 #define PUBLISH 6 + POT_DESIRED //  ANALOG_IN_CH + POT_DESIRED
 #define PUBLISH2 6 //  自由度分の制御入力の数
 #define PUBLISH3 6 //  自由度分の外乱の数
+#define PUBLISH4 6 //  自由度分の角度推定値z1の数
+#define PUBLISH5 6 //  自由度分の角速度derivativesの数
+#define PUBLISH6 6 //  自由度分の角速度推定値z2の数
+#define PUBLISH7 50 //  [処理したseq, 結果] + (kp, kd, input_coef, lamda_0) × 6自由度 × (現在値, 初期値)
 
 //------Subscribeするデータの個数--------------------------------------------------------------------
 #define SUBSCRIBE 6 + 20 + PARAMETER //  POT_DESIRED + 7~26自由度目の目標値 + PARAMETER
 #define SUBSCRIBE2 36 //  (FFパラメータa,b,c,d,e + FF制御入力時間T) × 6自由度
-#define SUBSCRIBE3 24 //  (kp + kd + input_coef + lamda_0) × 6自由度 ※GUIからのADRCパラメータ動的変更用
+#define SUBSCRIBE3 25 //  [seq] + (kp, kd, input_coef, lamda_0) × 6自由度
+#define SUBSCRIBE3_CAPACITY 32 //  受信メッセージの領域（要素数が違うメッセージも受け取って拒否できるよう SUBSCRIBE3 より大きくする）
+
+//------ADRCパラメータの変更--------------------------------------------------------------------
+//  パラメータを変更できる自由度の数（board内の自由度 0~ADRC_PARAM_DOF-1）
+#define ADRC_PARAM_DOF 6
+
+//  受け付けるパラメータの範囲（GUI側 adrc_param_common.py の PARAM_LIMITS と同じにすること）
+#define KP_MIN 0.0
+#define KP_MAX 100000.0
+#define KD_MIN 0.0
+#define KD_MAX 10000.0
+#define INPUT_COEF_MIN 1000.0
+#define INPUT_COEF_MAX 1000000.0
+#define LAMDA_0_MIN 1.0       //  ESOは dt=0.001 の前進オイラーなので lamda_0*dt < 2 が安定条件。余裕をみて1000まで
+#define LAMDA_0_MAX 1000.0
+
+//  設定中のパラメータをpublishする間隔（timer_callbackの回数。PUB_PERIOD_MS × 20 = 200ms）
+#define PARAM_PUB_EVERY 20
 
 //------AD/DA conv channels--------------------------------------------------------------------
 //  アナログ入力のピン数
@@ -118,6 +162,10 @@ std_msgs__msg__Float32MultiArray msg_pub2;
 std_msgs__msg__Float32MultiArray msg_pub3;
 std_msgs__msg__Float32MultiArray msg_sub;
 std_msgs__msg__Float32MultiArray msg_sub2;
+std_msgs__msg__Float32MultiArray msg_pub4;
+std_msgs__msg__Float32MultiArray msg_pub5;
+std_msgs__msg__Float32MultiArray msg_pub6;
+std_msgs__msg__Float32MultiArray msg_pub7;
 std_msgs__msg__Float32MultiArray msg_sub3;
 
 //  ROS2のオブジェクトの定義
@@ -127,6 +175,10 @@ rcl_subscription_t subscriber3;
 rcl_publisher_t publisher;
 rcl_publisher_t publisher2;
 rcl_publisher_t publisher3;
+rcl_publisher_t publisher4;
+rcl_publisher_t publisher5;
+rcl_publisher_t publisher6;
+rcl_publisher_t publisher7;
 rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
@@ -143,15 +195,14 @@ size_t domain_id = 16;
 //  subscribeメッセージの配列
 volatile float sub[SUBSCRIBE];
 volatile float sub2[SUBSCRIBE2];
-volatile float sub3[SUBSCRIBE3];
-
-//  ADRCパラメータ(sub3)の更新フラグ(0:更新なし, 1:新しい値を受信済みで未反映)
-volatile int param_updated = 0;
 
 //  publishメッセージの配列
 volatile uint16_t pub[PUBLISH];
 volatile float pub2[PUBLISH2];
 volatile float pub3[PUBLISH3];
+volatile float pub4[PUBLISH4];
+volatile float pub5[PUBLISH5];
+volatile float pub6[PUBLISH6];
 
 //  POT値(POT No.[44, 43, 42, 41, 40, 39])
 volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -242,12 +293,11 @@ SparseElement kd_15[] = { {4, 4, 420.0} };
 SparseElement kd_16[] = { {5, 5, 520.0} };
 
 //  PDゲインの構造体のポインタ
-//  ※GUIから動的に書き換えるためconstを外している
-SparseElement* kp_rows[] = {
+const SparseElement* kp_rows[] = {
   kp_11, kp_12, kp_13, kp_14, kp_15, kp_16
 };
 
-SparseElement* kd_rows[] = {
+const SparseElement* kd_rows[] = {
   kd_11, kd_12, kd_13, kd_14, kd_15, kd_16
 };
 
@@ -277,8 +327,7 @@ SparseElement input_coef_15[] = { {4, 4, 30000.0} };
 SparseElement input_coef_16[] = { {5, 5, 30000.0} };
 
 //  制御入力係数の構造体のポインタ
-//  ※GUIから動的に書き換えるためconstを外している
-SparseElement* input_coef_rows[] = {
+const SparseElement* input_coef_rows[] = {
   input_coef_11, input_coef_12, input_coef_13, input_coef_14, input_coef_15, input_coef_16
 };
 
@@ -386,12 +435,47 @@ int beta_row_sizes[18] = {
   1, 1, 1, 1, 1, 1  //beta3
 };
 
+//---ADRCパラメータの変更（GUIから受信）--------------------------------------------------------------------
+//  書き換え用のポインタ（kp_rows などは const なので、同じ配列を指す書き換え可能なポインタを別に持つ）
+SparseElement* const kp_rows_param[] = {
+  kp_11, kp_12, kp_13, kp_14, kp_15, kp_16
+};
+
+SparseElement* const kd_rows_param[] = {
+  kd_11, kd_12, kd_13, kd_14, kd_15, kd_16
+};
+
+SparseElement* const input_coef_rows_param[] = {
+  input_coef_11, input_coef_12, input_coef_13, input_coef_14, input_coef_15, input_coef_16
+};
+
+//  受け付けるパラメータの範囲（並び: kp, kd, input_coef, lamda_0）
+const float param_min[4] = {KP_MIN, KD_MIN, INPUT_COEF_MIN, LAMDA_0_MIN};
+const float param_max[4] = {KP_MAX, KD_MAX, INPUT_COEF_MAX, LAMDA_0_MAX};
+
+//  以下はスレッド間で共有するので adc_lock を取ってから読み書きする
+//  検査に通って反映を待っているパラメータ（並びは受信メッセージと同じ）
+float param_pending[SUBSCRIBE3];
+//  反映待ちのパラメータがあるか（0:なし, 1:あり）
+int param_pending_flag = 0;
+//  最後に処理した seq と結果（publish用）
+float param_ack_seq = 0.0;
+float param_result = 0.0;
+//  現在のパラメータと .ino の初期値（publish用。[4*i+0..3] = 自由度 i の kp, kd, input_coef, lamda_0）
+float param_current[24];
+float param_default[24];
+
+//  設定中のパラメータをすぐにpublishする要求（受信を処理したとき1）
+volatile int param_pub_request = 0;
+//  設定中のパラメータをpublishする間隔のカウンタ
+int param_pub_count = 0;
+
 //---追加の制御入力u--------------------------------------------------------------------
 //  時間変数
 float t_start[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 //　1つ前の目標値
-float Previous_POT_desired[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+float Previous_POT_desired[6] = {-1.0, -1.0, -1.0, -1.0, -1.0, -1.0};
 
 //  目標値の一時保存
 float tmp_POT_desired[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -574,13 +658,12 @@ void thread_callback() {
 
       }
 
-      //  GUIから新しいADRCパラメータを受信していれば反映する
-      if(param_updated == 1){
-        //  反映中に新しいメッセージが来ても取りこぼさないよう、先にフラグを下ろす
-        param_updated = 0;
-        applyParameters();
+      //  GUIから受信したADRCパラメータを反映（ESO・ADRCの計算の前に行う）
+      if(param_pending_flag == 1){
+        applyADRCParam();
+        param_pending_flag = 0;
       }
-
+      
       //  publishメッセージの配列にPOT値を格納
       for(int i = 0; i < ANALOG_IN_CH; i++){
         pub[i] = (uint16_t)round(POT_realized[i]);
@@ -604,6 +687,21 @@ void thread_callback() {
       /*  publishメッセージの配列にz3を格納*/
       for (int i = 0; i < PUBLISH3; i++){
         pub3[i] = z3[i];
+      }
+
+      /*  publishメッセージの配列にz1(角度の推定値)を格納（並びはz3と同じ）*/
+      for (int i = 0; i < PUBLISH4; i++){
+        pub4[i] = z1[i];
+      }
+
+      /*  publishメッセージの配列に角速度(derivatives)を格納（並びはz3と同じ）*/
+      for (int i = 0; i < PUBLISH5; i++){
+        pub5[i] = derivatives[i];
+      }
+
+      /*  publishメッセージの配列にz2(角速度の推定値)を格納（並びはz3と同じ）*/
+      for (int i = 0; i < PUBLISH6; i++){
+        pub6[i] = z2[i];
       }
 
     }
@@ -712,6 +810,46 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     }
     //  メッセージをトピックに送信
     RCSOFTCHECK(rcl_publish(&publisher3, &msg_pub3, NULL));
+
+    //  Publlishするメッセージmsg_pub4(z1)に格納
+    for (size_t i = 0; i < PUBLISH4; i++) {
+      msg_pub4.data.data[i] = pub4[i];
+    }
+    //  メッセージをトピックに送信
+    RCSOFTCHECK(rcl_publish(&publisher4, &msg_pub4, NULL));
+
+    //  Publlishするメッセージmsg_pub5(derivatives)に格納
+    for (size_t i = 0; i < PUBLISH5; i++) {
+      msg_pub5.data.data[i] = pub5[i];
+    }
+    //  メッセージをトピックに送信
+    RCSOFTCHECK(rcl_publish(&publisher5, &msg_pub5, NULL));
+
+    //  Publlishするメッセージmsg_pub6(z2)に格納
+    for (size_t i = 0; i < PUBLISH6; i++) {
+      msg_pub6.data.data[i] = pub6[i];
+    }
+    //  メッセージをトピックに送信
+    RCSOFTCHECK(rcl_publish(&publisher6, &msg_pub6, NULL));
+
+    //  設定中のADRCパラメータ（PARAM_PUB_EVERY回に1回と、パラメータの受信を処理した直後）
+    param_pub_count++;
+    if (param_pub_count >= PARAM_PUB_EVERY || param_pub_request == 1) {
+      param_pub_count = 0;
+      param_pub_request = 0;
+      {
+        //  スレッドセーフ(制御スレッドが書き換え中の値を読まない)
+        Threads::Scope scope(adc_lock);
+        msg_pub7.data.data[0] = param_ack_seq;
+        msg_pub7.data.data[1] = param_result;
+        for (size_t i = 0; i < 24; i++) {
+          msg_pub7.data.data[2 + i] = param_current[i];
+          msg_pub7.data.data[26 + i] = param_default[i];
+        }
+      }
+      //  メッセージをトピックに送信（送信待ちの間に制御スレッドを止めないよう、ロックの外で送る）
+      RCSOFTCHECK(rcl_publish(&publisher7, &msg_pub7, NULL));
+    }
   }
 }
 
@@ -738,74 +876,200 @@ void subscription_callback2(const void * msgin)
   for (size_t i = 0; i < SUBSCRIBE2; i++) {
     sub2[i] = msg->data.data[i];
   }
-
+  
 }
 
-//  ADRCパラメータ(kp, kd, input_coef, lamda_0)のSubscribe関数（ROS2）
-//  メッセージの並び: [0-5]:kp, [6-11]:kd, [12-17]:input_coef, [18-23]:lamda_0
-//  ※負の値を入れた要素は「変更しない」の意味になる
+//  ADRCパラメータのSubscribe関数（ROS2）
+//  受信したメッセージを検査し、通ったものだけを制御スレッドへ渡す（反映は制御スレッドの周期の先頭で行う）
 void subscription_callback3(const void * msgin)
 {
   //  受け取ったメッセージmsginをstd_msgs__msg__Float32MultiArray型にキャスト
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
 
-  //  要素数が足りないメッセージは無視する（不正なパラメータでの暴走防止）
-  if (msg->data.size < (size_t)SUBSCRIBE3) {
-    return;
-  }
+  //  検査（ロックの外で行う）
+  float seq = 0.0;
+  int result = checkADRCParam(msg, &seq);
 
-  //  Subscribeしたメッセージを格納
-  for (size_t i = 0; i < SUBSCRIBE3; i++) {
-    sub3[i] = msg->data.data[i];
+  //  スレッドセーフ(制御スレッドが反映中の値を書き換えない)
+  Threads::Scope scope(adc_lock);
+  if(result == 1){
+    for (size_t i = 0; i < SUBSCRIBE3; i++) {
+      param_pending[i] = msg->data.data[i];
+    }
+    param_pending_flag = 1;
+  } else{
+    //  不正なメッセージは反映せず、理由をpublishで返す
+    param_ack_seq = seq;
+    param_result = result;
+    param_pub_request = 1;
   }
-
-  //  制御スレッド側で反映させるためのフラグを立てる
-  param_updated = 1;
 
 }
 
-//  ADRCパラメータ反映用ヘルパ関数
-//  スパース行列の対角要素(col == index)を探して値を書き換える
-void setSparseDiag(SparseElement* row, int size, int index, float value) {
-  for (int k = 0; k < size; k++) {
-    if (row[k].col == index) {
-      row[k].value = value;
-      return;
-    }
+//  自由度 i のパラメータ p (0:kp, 1:kd, 2:input_coef) の要素を返す。変更できない場合は NULL
+//  （kp, kd は対角要素(col == i)。input_coef はADRC計算式の分母に先頭要素を使うので、先頭が対角要素のときだけ）
+SparseElement* findParamElement(int i, int p){
+  if(i < 0 || i >= ADRC_PARAM_DOF){
+    return NULL;
   }
 
-  //  対角要素が見つからない場合は先頭要素を書き換える
-  if (size > 0) {
-    row[0].value = value;
+  if(p == 2){
+    if(input_coef_row_sizes[i] > 0 && input_coef_rows_param[i][0].col == i){
+      return &input_coef_rows_param[i][0];
+    }
+    return NULL;
+  }
+
+  SparseElement* row = (p == 0) ? kp_rows_param[i] : kd_rows_param[i];
+  int size = (p == 0) ? kp_row_sizes[i] : kd_row_sizes[i];
+  for(int k = 0; k < size; k++){
+    if(row[k].col == i){
+      return &row[k];
+    }
+  }
+  return NULL;
+}
+
+//  受信したADRCパラメータの検査（戻り値 1:反映してよい, 負:拒否の理由。seq_out には seq を返す（seqが不正なら0））
+int checkADRCParam(const std_msgs__msg__Float32MultiArray * msg, float * seq_out){
+  *seq_out = 0.0;
+
+  //  要素数
+  if(msg->data.size != (size_t)SUBSCRIBE3){
+    return -1;
+  }
+
+  //  seq（1以上の整数。floatで正確に表せる範囲）
+  float seq = msg->data.data[0];
+  if(!isfinite(seq) || seq < 1.0 || seq > 16777216.0 || seq != floorf(seq)){
+    return -2;
+  }
+  *seq_out = seq;
+
+  //  パラメータ（NaN は「変更しない」）
+  for(int i = 0; i < 6; i++){
+    for(int p = 0; p < 4; p++){
+      float v = msg->data.data[1 + 4*i + p];
+      if(isnan(v)){
+        continue;
+      }
+      if(!isfinite(v)){
+        return -3;
+      }
+      if(i >= ADRC_PARAM_DOF || (p < 3 && findParamElement(i, p) == NULL)){
+        return -5;
+      }
+      if(v < param_min[p] || v > param_max[p]){
+        return -4;
+      }
+    }
+  }
+  return 1;
+}
+
+//  自由度 i のパラメータ p (0:kp, 1:kd, 2:input_coef, 3:lamda_0) の現在値（変更できない自由度は NaN）
+float getADRCParam(int i, int p){
+  if(i < 0 || i >= ADRC_PARAM_DOF){
+    return NAN;
+  }
+  if(p == 3){
+    return lamda_0[i];
+  }
+  SparseElement* e = findParamElement(i, p);
+  return (e == NULL) ? NAN : e->value;
+}
+
+//  publish用の現在のパラメータを更新
+void updateParamCurrent(){
+  for(int i = 0; i < 6; i++){
+    for(int p = 0; p < 4; p++){
+      param_current[4*i + p] = getADRCParam(i, p);
+    }
   }
 }
 
-//  ADRCパラメータ反映関数（制御スレッド内から呼ぶこと）
-void applyParameters() {
-  for (int i = 0; i < 6; i++) {
-    //  kp（負の値は「変更しない」）
-    if (sub3[i] >= 0.0) {
-      setSparseDiag(kp_rows[i], kp_row_sizes[i], i, sub3[i]);
+//  自由度 i のESOの状態を初期化（角度の推定値は実測値、それ以外は0）
+void resetESO(int i){
+  z1[i] = POT_realized[i];
+  z2[i] = 0.0;
+  z3[i] = 0.0;
+  dz1[i] = 0.0;
+  dz2[i] = 0.0;
+  dz3[i] = 0.0;
+  outputADRC[i] = 0.0;
+}
+
+//  検査済みのADRCパラメータを反映する（制御スレッドから、adc_lock を取った状態で呼ぶこと）
+void applyADRCParam(){
+  int lamda_changed = 0;
+
+  for(int i = 0; i < ADRC_PARAM_DOF; i++){
+    int changed = 0;
+
+    for(int p = 0; p < 4; p++){
+      float v = param_pending[1 + 4*i + p];
+      if(isnan(v)){
+        continue;
+      }
+      if(p == 3){
+        lamda_0[i] = v;
+        lamda_changed = 1;
+      } else{
+        findParamElement(i, p)->value = v;
+      }
+      changed = 1;
     }
 
-    //  kd（負の値は「変更しない」）
-    if (sub3[i+6] >= 0.0) {
-      setSparseDiag(kd_rows[i], kd_row_sizes[i], i, sub3[i+6]);
-    }
-
-    //  input_coef（ADRC計算式の分母になるため0以下は受け付けない）
-    if (sub3[i+12] > 0.0) {
-      setSparseDiag(input_coef_rows[i], input_coef_row_sizes[i], i, sub3[i+12]);
-    }
-
-    //  lamda_0（負の値は「変更しない」）
-    if (sub3[i+18] >= 0.0) {
-      lamda_0[i] = sub3[i+18];
+    //  ESOの状態が NaN/inf の自由度（input_coef=0 で動かしていた自由度など）はパラメータを変えても回復しないので初期化する
+    if(changed && !(isfinite(z1[i]) && isfinite(z2[i]) && isfinite(z3[i]) && isfinite(outputADRC[i]))){
+      resetESO(i);
     }
   }
 
-  //  lamda_0が変わった可能性があるのでオブザーバーゲインを再計算
-  computeBeta();
+  //  lamda_0 が変わったらオブザーバーゲインを再計算
+  if(lamda_changed){
+    computeBeta();
+  }
+
+  updateParamCurrent();
+  param_ack_seq = param_pending[0];
+  param_result = 1;
+  param_pub_request = 1;
+}
+
+//  Publish用 Float32MultiArray メッセージ変数のメモリの確保と初期化（msg_pub2 などと同じ手順）
+void initPubMsgFloat(std_msgs__msg__Float32MultiArray * m, size_t n){
+  m->data.capacity = n; //  data配列の最大要素数=メッセージの要素数
+  m->data.size = n; //  メッセージの要素数
+  m->data.data = (float*)malloc(n * sizeof(float));  //　data配列に必要なメモリを動的に確保
+  m->layout.dim.capacity = 1;  //  1-dimentional array: vector（次元の数）
+  m->layout.dim.size = 1;  //  メッセージのデータの次元数
+  m->layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(m->layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension));
+  m->layout.dim.data[0].label.capacity = 20;
+  m->layout.dim.data[0].label.data = (char*) malloc(m->layout.dim.data[0].label.capacity * sizeof(char));
+  m->layout.dim.data[0].label.data[0] = '\0';
+  m->layout.dim.data[0].label.size = 0;
+  m->layout.dim.data[0].size = n; //  publishするメッセージの次元のサイズ
+  m->layout.dim.data[0].stride = n; //　publishするメッセージの更新ストライド
+  for(size_t i = 0; i < n; i++){
+    m->data.data[i] = 0.0;
+  }
+}
+
+//  Subscribe用 Float32MultiArray メッセージ変数のメモリの確保と初期化（msg_sub2 などと同じ手順）
+void initSubMsgFloat(std_msgs__msg__Float32MultiArray * m, size_t capacity){
+  m->data.capacity = capacity;  //  data配列の最大要素数
+  m->data.size = 0;  //　初期状態でメッセージを受け取ることを保証（初期化）
+  m->data.data = (float*)malloc(capacity * sizeof(float));  //　data配列に必要なメモリを動的に確保
+  m->layout.dim.capacity = 1;  //  1-dimentional array: vector
+  m->layout.dim.size = 0;  //　配列の次元情報を初期化
+  m->layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(m->layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension));
+  m->layout.dim.data[0].label.capacity = 20;
+  m->layout.dim.data[0].label.size = 0;
+  m->layout.dim.data[0].label.data = (char*) malloc(m->layout.dim.data[0].label.capacity * sizeof(char));
+  for(size_t i = 0; i < capacity; i++){
+    m->data.data[i] = 0.0;
+  }
 }
 
 //  オブザーバーゲイン関数
@@ -888,7 +1152,7 @@ void ADRC(int index){
   }
 
   for(int k = 0; k < kd_row_sizes[index]; k++){
-    sum_kd += (kd_rows[index][k].value) * z2[kd_rows[index][k].col];
+    sum_kd += (kd_rows[index][k].value) * derivatives[kd_rows[index][k].col];
   }
 
   //  ADRC計算
@@ -965,8 +1229,18 @@ void AddInput(int index) {
   // --- FF制御入力 ---
   outputAdd[index] = FF_param_a[index] * timeFF * timeFF * timeFF * timeFF * timeFF + FF_param_b[index] * timeFF * timeFF * timeFF * timeFF + FF_param_c[index] * timeFF * timeFF * timeFF + FF_param_d[index] * timeFF * timeFF + FF_param_e[index] *timeFF;
 
+  //  FF時間終了
   if(timeFF == FF_time[index]){
+    //  入力0
     outputAdd[index] = 0;
+
+    //  FFパラメータを初期化
+    FF_param_a[index] = 0.0;
+    FF_param_b[index] = 0.0;
+    FF_param_c[index] = 0.0;
+    FF_param_d[index] = 0.0;
+    FF_param_e[index] = 0.0;
+    FF_time[index] = 0.0;
   }
 
 }
@@ -975,7 +1249,7 @@ void AddInput(int index) {
 void POT_desired_change(int index) {
 
   //　初回の目標値を保存
-  if(Previous_POT_desired[index] == 0) {
+  if(Previous_POT_desired[index] == -1.0) {
     Previous_POT_desired[index] = POT_desired[index];
     tmp_POT_desired[index] = POT_desired[index];
   }
@@ -1401,19 +1675,6 @@ void setup() {
     msg_sub2.layout.dim.data[i].label.data = (char*) malloc(msg_sub2.layout.dim.data[i].label.capacity * sizeof(char));
   }
 
-  //  メッセージ変数msg_sub3に対して、メモリの確保と初期化
-  msg_sub3.data.capacity = SUBSCRIBE3;  //  data配列の最大要素数=メッセージの要素数
-  msg_sub3.data.size = 0;  //　初期状態でメッセージを受け取ることを保証（初期化）
-  msg_sub3.data.data = (float*)malloc(msg_sub3.data.capacity * sizeof(float));  //　data配列に必要なメモリを動的に確保
-  msg_sub3.layout.dim.capacity = 1;  //  1-dimentional array: vector
-  msg_sub3.layout.dim.size = 0;  //　配列の次元情報を初期化
-  msg_sub3.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg_sub3.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension)); //  MultiArrayDimension のためのメモリを確保
-  for(size_t i = 0; i < msg_sub3.layout.dim.capacity; i++){ //  ラベルフィールドの設定(コピペ)
-    msg_sub3.layout.dim.data[i].label.capacity = 20;
-    msg_sub3.layout.dim.data[i].label.size = 0;
-    msg_sub3.layout.dim.data[i].label.data = (char*) malloc(msg_sub3.layout.dim.data[i].label.capacity * sizeof(char));
-  }
-
   //------initialize message variables--------------------------------------------------------------------
   //  2.メッセージ変数の設定段階（送信可能な状態に設定）
   // msg_pub
@@ -1458,12 +1719,19 @@ void setup() {
       msg_sub2.data.data[i] = 1.0;
     }
     sub2[i] = msg_sub2.data.data[i]; //  メッセージデータをsub配列にコピー
-
+    
   }
-  for (size_t i = 0; i < SUBSCRIBE3; i++) {
-    msg_sub3.data.data[i] = -1.0; //  sub3配列（ADRCパラメータ）の初期化。負の値=「変更しない」なので.ino側の設定値が保持される
-    sub3[i] = msg_sub3.data.data[i]; //  メッセージデータをsub3配列にコピー
 
+  //  追加したメッセージ変数（z1, derivatives, z2, ADRCパラメータ）のメモリの確保と初期化
+  initPubMsgFloat(&msg_pub4, PUBLISH4);
+  initPubMsgFloat(&msg_pub5, PUBLISH5);
+  initPubMsgFloat(&msg_pub6, PUBLISH6);
+  initPubMsgFloat(&msg_pub7, PUBLISH7);
+  initSubMsgFloat(&msg_sub3, SUBSCRIBE3_CAPACITY);
+  for (size_t i = 0; i < PUBLISH4; i++) {
+    pub4[i] = 0;
+    pub5[i] = 0;
+    pub6[i] = 0;
   }
 
   delay(2000);
@@ -1521,6 +1789,30 @@ void setup() {
     &node,  //  publisher3が関連付けられるノードを指定
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
     PUB_TOPICNAME3));  //  publishするトピックの名前
+
+  RCCHECK(rclc_publisher_init_default(
+    &publisher4, //  publisher4の構造体を指定
+    &node,  //  publisher4が関連付けられるノードを指定
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    PUB_TOPICNAME4));  //  publishするトピックの名前
+
+  RCCHECK(rclc_publisher_init_default(
+    &publisher5, //  publisher5の構造体を指定
+    &node,  //  publisher5が関連付けられるノードを指定
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    PUB_TOPICNAME5));  //  publishするトピックの名前
+
+  RCCHECK(rclc_publisher_init_default(
+    &publisher6, //  publisher6の構造体を指定
+    &node,  //  publisher6が関連付けられるノードを指定
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    PUB_TOPICNAME6));  //  publishするトピックの名前
+
+  RCCHECK(rclc_publisher_init_default(
+    &publisher7, //  publisher7の構造体を指定
+    &node,  //  publisher7が関連付けられるノードを指定
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    PUB_TOPICNAME7));  //  publishするトピックの名前
 
   //------create timer（timerを利用して定期的に実行するtimer_callback関数を設定）--------------------------------------------------------------------
   const unsigned int timer_timeout = PUB_PERIOD_MS;
@@ -1586,6 +1878,12 @@ void setup() {
 
   //  オブザーバーゲイン計算
   computeBeta();
+
+  //  ADRCパラメータの .ino の初期値を保存し、publish用の現在値を作る
+  updateParamCurrent();
+  for (int i = 0; i < 24; i++){
+    param_default[i] = param_current[i];
+  }
 
   //==========================================================
 

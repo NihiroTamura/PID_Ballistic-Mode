@@ -37,6 +37,8 @@
     PUB_TOPICNAME4: z1（角度の推定値）
     PUB_TOPICNAME5: derivatives（角速度。RCローパスフィルタ後の値）
     PUB_TOPICNAME6: z2（角速度の推定値）
+・FF入力 outputAdd を publish（PUB_PERIOD_MS ごと, Float32MultiArray, 6要素。要素 i = board内の自由度 i で、PUB_TOPICNAME2(PWM) と同じ並び）
+    PUB_TOPICNAME8: outputAdd（PWM = outputADRC + outputAdd のうちFFの分）
 */
 //=============================================================================================================================================
 //------周期--------------------------------------------------------------------
@@ -64,6 +66,7 @@
 #define PUB_TOPICNAME5 "/board3_tk_derivatives_float/pub"
 #define PUB_TOPICNAME6 "/board3_tk_z2_float/pub"
 #define PUB_TOPICNAME7 "/board3_tk_ADRCparam_float/pub"
+#define PUB_TOPICNAME8 "/board3_tk_FF_float/pub"
 
 //------目標値の個数--------------------------------------------------------------------
 #define POT_DESIRED 6
@@ -82,6 +85,7 @@
 #define PUBLISH5 6 //  自由度分の角速度derivativesの数
 #define PUBLISH6 6 //  自由度分の角速度推定値z2の数
 #define PUBLISH7 50 //  [処理したseq, 結果] + (kp, kd, input_coef, lamda_0) × 6自由度 × (現在値, 初期値)
+#define PUBLISH8 6 //  自由度分のFF入力outputAddの数
 
 //------Subscribeするデータの個数--------------------------------------------------------------------
 #define SUBSCRIBE 6 + 20 + PARAMETER //  POT_DESIRED + 7~26自由度目の目標値 + PARAMETER
@@ -166,6 +170,7 @@ std_msgs__msg__Float32MultiArray msg_pub4;
 std_msgs__msg__Float32MultiArray msg_pub5;
 std_msgs__msg__Float32MultiArray msg_pub6;
 std_msgs__msg__Float32MultiArray msg_pub7;
+std_msgs__msg__Float32MultiArray msg_pub8;
 std_msgs__msg__Float32MultiArray msg_sub3;
 
 //  ROS2のオブジェクトの定義
@@ -179,6 +184,7 @@ rcl_publisher_t publisher4;
 rcl_publisher_t publisher5;
 rcl_publisher_t publisher6;
 rcl_publisher_t publisher7;
+rcl_publisher_t publisher8;
 rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
@@ -203,6 +209,7 @@ volatile float pub3[PUBLISH3];
 volatile float pub4[PUBLISH4];
 volatile float pub5[PUBLISH5];
 volatile float pub6[PUBLISH6];
+volatile float pub8[PUBLISH8];
 
 //  POT値(POT No.[47, 46, 45, 33, 32, 31])
 volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -266,31 +273,31 @@ struct SparseElement {
 //  (POT No.[47, 46, 45, 33, 32, 31])
 //(P) -Pゲイン（各自由度　最大6要素）--------------------------------------------------------------------
 /*//  自由度1*/
-SparseElement kp_11[] = { {0, 0, 10000.0} };
+SparseElement kp_11[] = { {0, 0, 4600.0} };
 //  自由度2
-SparseElement kp_12[] = { {1, 1, 8000.0} };
+SparseElement kp_12[] = { {1, 1, 4200.0} };
 //  自由度3
-SparseElement kp_13[] = { {2, 2, 8000.0} };
+SparseElement kp_13[] = { {2, 2, 5000.0} };
 //  自由度4
-SparseElement kp_14[] = { {3, 3, 10000.0} };
+SparseElement kp_14[] = { {3, 3, 4600.0} };
 //  自由度5
-SparseElement kp_15[] = { {4, 4, 8000.0} };
+SparseElement kp_15[] = { {4, 4, 4600.0} };
 //  自由度6
-SparseElement kp_16[] = { {5, 5, 8500.0} };
+SparseElement kp_16[] = { {5, 5, 5000.0} };
 
 //(P) -Dゲイン（各自由度　最大6要素）--------------------------------------------------------------------
 /*//  自由度1*/
-SparseElement kd_11[] = { {0, 0, 230.0} };
+SparseElement kd_11[] = { {0, 0, 150.0} };
 //  自由度2
-SparseElement kd_12[] = { {1, 1, 250.0} };
+SparseElement kd_12[] = { {1, 1, 90.0} };
 //  自由度3
-SparseElement kd_13[] = { {2, 2, 400.0} };
+SparseElement kd_13[] = { {2, 2, 140.0} };
 //  自由度4
-SparseElement kd_14[] = { {3, 3, 230.0} };
+SparseElement kd_14[] = { {3, 3, 100.0} };
 //  自由度5
-SparseElement kd_15[] = { {4, 4, 250.0} };
+SparseElement kd_15[] = { {4, 4, 100.0} };
 //  自由度6
-SparseElement kd_16[] = { {5, 5, 230.0} };
+SparseElement kd_16[] = { {5, 5, 160.0} };
 
 //  PDゲインの構造体のポインタ
 const SparseElement* kp_rows[] = {
@@ -314,17 +321,17 @@ int kd_row_sizes[6] = {
 //  (POT No.[47, 46, 45, 33, 32, 31])
 //(P) -制御入力係数（各自由度　最大6要素）--------------------------------------------------------------------
 //  自由度1
-SparseElement input_coef_11[] = { {0, 0, 40000.0} };
+SparseElement input_coef_11[] = { {0, 0, 30000.0} };
 //  自由度2
-SparseElement input_coef_12[] = { {1, 1, 60000.0} };
+SparseElement input_coef_12[] = { {1, 1, 30000.0} };
 //  自由度3
 SparseElement input_coef_13[] = { {2, 2, 30000.0} };
 //  自由度4
-SparseElement input_coef_14[] = { {3, 3, 40000.0} };
+SparseElement input_coef_14[] = { {3, 3, 30000.0} };
 //  自由度5
-SparseElement input_coef_15[] = { {4, 4, 40000.0} };
+SparseElement input_coef_15[] = { {4, 4, 30000.0} };
 //  自由度6
-SparseElement input_coef_16[] = { {5, 5, 50000.0} };
+SparseElement input_coef_16[] = { {5, 5, 30000.0} };
 
 //  制御入力係数の構造体のポインタ
 const SparseElement* input_coef_rows[] = {
@@ -370,7 +377,7 @@ float beta3[6] = {0};
 
 //(P)  オブザーバーの極(-λ₀の重根)(POT No.[47, 46, 45, 33, 32, 31])  
 /*No1*/
-float lamda_0[6] = {300.0, 300.0, 300.0, 300.0, 300.0, 500.0};
+float lamda_0[6] = {300.0, 300.0, 300.0, 300.0, 300.0, 300.0};
 
 //  オブザーバーゲインの構造体
 struct SparseElementBeta {
@@ -684,6 +691,11 @@ void thread_callback() {
         pub2[i] = outputADRC[i] + outputAdd[i];
       }
 
+      /*  publishメッセージの配列にFF入力(outputAdd)を格納（並びはPWMと同じ）*/
+      for (int i = 0; i < PUBLISH8; i++){
+        pub8[i] = outputAdd[i];
+      }
+
       /*  publishメッセージの配列にz3を格納*/
       for (int i = 0; i < PUBLISH3; i++){
         pub3[i] = z3[i];
@@ -831,6 +843,13 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     }
     //  メッセージをトピックに送信
     RCSOFTCHECK(rcl_publish(&publisher6, &msg_pub6, NULL));
+
+    //  Publlishするメッセージmsg_pub8(FF入力outputAdd)に格納
+    for (size_t i = 0; i < PUBLISH8; i++) {
+      msg_pub8.data.data[i] = pub8[i];
+    }
+    //  メッセージをトピックに送信
+    RCSOFTCHECK(rcl_publish(&publisher8, &msg_pub8, NULL));
 
     //  設定中のADRCパラメータ（PARAM_PUB_EVERY回に1回と、パラメータの受信を処理した直後）
     param_pub_count++;
@@ -1727,11 +1746,15 @@ void setup() {
   initPubMsgFloat(&msg_pub5, PUBLISH5);
   initPubMsgFloat(&msg_pub6, PUBLISH6);
   initPubMsgFloat(&msg_pub7, PUBLISH7);
+  initPubMsgFloat(&msg_pub8, PUBLISH8);
   initSubMsgFloat(&msg_sub3, SUBSCRIBE3_CAPACITY);
   for (size_t i = 0; i < PUBLISH4; i++) {
     pub4[i] = 0;
     pub5[i] = 0;
     pub6[i] = 0;
+  }
+  for (size_t i = 0; i < PUBLISH8; i++) {
+    pub8[i] = 0;
   }
 
   delay(2000);
@@ -1813,6 +1836,12 @@ void setup() {
     &node,  //  publisher7が関連付けられるノードを指定
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
     PUB_TOPICNAME7));  //  publishするトピックの名前
+
+  RCCHECK(rclc_publisher_init_default(
+    &publisher8, //  publisher8の構造体を指定
+    &node,  //  publisher8が関連付けられるノードを指定
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), //  publishするメッセージの型の定義(std_msgs/msg/Float32MultiArray 型)
+    PUB_TOPICNAME8));  //  publishするトピックの名前
 
   //------create timer（timerを利用して定期的に実行するtimer_callback関数を設定）--------------------------------------------------------------------
   const unsigned int timer_timeout = PUB_PERIOD_MS;

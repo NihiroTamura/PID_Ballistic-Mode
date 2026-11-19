@@ -54,7 +54,7 @@
 #define LED 13
 
 //------IP (Configure following IPs for your environment)--------------------------------------------------------------------
-#define TEENSY_IP 192, 168, 1, 155 // IP that the teensy 4.1 will have ※teensyのIPは192.168.[0-3].[0-255]
+#define TEENSY_IP 192, 168, 1, 159 // IP that the teensy 4.1 will have ※teensyのIPは192.168.[0-3].[0-255]
 #define AGENT_IP 192, 168, 1, 217 // IP where a micro-ros agent waits
 
 //------Topic names--------------------------------------------------------------------
@@ -1180,7 +1180,8 @@ void ESO(int index){
 
   //  制御入力の計算
   for(int k = 0; k < input_coef_row_sizes[index]; k++){
-    sum_input += (input_coef_rows[index][k].value) * outputADRC[input_coef_rows[index][k].col];
+    //sum_input += (input_coef_rows[index][k].value) * outputADRC[input_coef_rows[index][k].col];  //  FF入力を考慮しない（従来）
+    sum_input += (input_coef_rows[index][k].value) * (outputADRC[input_coef_rows[index][k].col] + outputAdd[input_coef_rows[index][k].col]);  //  FF入力outputAddを考慮する
   }
 
   //  角度の推定

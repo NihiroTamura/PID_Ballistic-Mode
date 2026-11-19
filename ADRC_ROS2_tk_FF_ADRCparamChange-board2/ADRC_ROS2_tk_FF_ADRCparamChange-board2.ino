@@ -1134,7 +1134,8 @@ void ESO(int index){
 
   //  制御入力の計算
   for(int k = 0; k < input_coef_row_sizes[index]; k++){
-    sum_input += (input_coef_rows[index][k].value) * outputADRC[input_coef_rows[index][k].col];
+    //sum_input += (input_coef_rows[index][k].value) * outputADRC[input_coef_rows[index][k].col];  //  FF入力を考慮しない（従来）
+    sum_input += (input_coef_rows[index][k].value) * (outputADRC[input_coef_rows[index][k].col] + outputAdd[input_coef_rows[index][k].col]);  //  FF入力outputAddを考慮する
   }
 
   //  角度の推定

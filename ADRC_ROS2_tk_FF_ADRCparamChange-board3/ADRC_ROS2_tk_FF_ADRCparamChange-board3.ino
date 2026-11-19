@@ -217,7 +217,7 @@ volatile float POT_realized[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 //(P)  目標値の初期値(POT No.[47, 46, 45, 33, 32, 31])
 /*No1*/
 volatile float POT_desired[6] = {
-  300.0, 200.0, 400.0, 350.0, 420.0, 400.0
+  300.0, 600.0, 400.0, 350.0, 420.0, 400.0
 };
 
 //---ADRC--------------------------------------------------------------------
@@ -273,11 +273,11 @@ struct SparseElement {
 //  (POT No.[47, 46, 45, 33, 32, 31])
 //(P) -Pゲイン（各自由度　最大6要素）--------------------------------------------------------------------
 /*//  自由度1*/
-SparseElement kp_11[] = { {0, 0, 4600.0} };
+SparseElement kp_11[] = { {0, 0, 3500.0} };
 //  自由度2
-SparseElement kp_12[] = { {1, 1, 4200.0} };
+SparseElement kp_12[] = { {1, 1, 3200.0} };
 //  自由度3
-SparseElement kp_13[] = { {2, 2, 5000.0} };
+SparseElement kp_13[] = { {2, 2, 3400.0} };
 //  自由度4
 SparseElement kp_14[] = { {3, 3, 4600.0} };
 //  自由度5
@@ -287,11 +287,11 @@ SparseElement kp_16[] = { {5, 5, 5000.0} };
 
 //(P) -Dゲイン（各自由度　最大6要素）--------------------------------------------------------------------
 /*//  自由度1*/
-SparseElement kd_11[] = { {0, 0, 150.0} };
+SparseElement kd_11[] = { {0, 0, 90.0} };
 //  自由度2
 SparseElement kd_12[] = { {1, 1, 90.0} };
 //  自由度3
-SparseElement kd_13[] = { {2, 2, 140.0} };
+SparseElement kd_13[] = { {2, 2, 135.0} };
 //  自由度4
 SparseElement kd_14[] = { {3, 3, 100.0} };
 //  自由度5
@@ -323,9 +323,9 @@ int kd_row_sizes[6] = {
 //  自由度1
 SparseElement input_coef_11[] = { {0, 0, 30000.0} };
 //  自由度2
-SparseElement input_coef_12[] = { {1, 1, 30000.0} };
+SparseElement input_coef_12[] = { {1, 1, 40000.0} };
 //  自由度3
-SparseElement input_coef_13[] = { {2, 2, 30000.0} };
+SparseElement input_coef_13[] = { {2, 2, 35000.0} };
 //  自由度4
 SparseElement input_coef_14[] = { {3, 3, 30000.0} };
 //  自由度5
@@ -1134,7 +1134,8 @@ void ESO(int index){
 
   //  制御入力の計算
   for(int k = 0; k < input_coef_row_sizes[index]; k++){
-    sum_input += (input_coef_rows[index][k].value) * outputADRC[input_coef_rows[index][k].col];
+    //sum_input += (input_coef_rows[index][k].value) * outputADRC[input_coef_rows[index][k].col];  //  FF入力を考慮しない（従来）
+    sum_input += (input_coef_rows[index][k].value) * (outputADRC[input_coef_rows[index][k].col] + outputAdd[input_coef_rows[index][k].col]);  //  FF入力outputAddを考慮する
   }
 
   //  角度の推定
